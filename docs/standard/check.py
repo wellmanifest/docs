@@ -142,6 +142,31 @@ def check(root, revision, deliverables=(), today=None, base=None):
             fail('DOCS_LOCATION', declared, 'Deliverable must remain inside its owning repository without symlinks')
         else:
             selected.add(relative.as_posix())
+    if base and not any(item['code'] == 'DOCS_BASE' for item in findings):
+        changes = subprocess.run(
+            ['git', 'diff', '--no-renames', '--name-only', '-z', base, '--'],
+            cwd=root, capture_output=True, check=False)
+        if changes.returncode:
+            fail('DOCS_BASE', base, 'Cannot enumerate changes against the trusted base')
+        else:
+            discovery = POLICY['discovery']
+            for name in set(changes.stdout.decode().split('\0')) & files:
+                if not name.lower().endswith('.md'):
+                    continue
+                old = subprocess.run(['git', 'show', base + ':' + name], cwd=root,
+                                     capture_output=True, text=True, check=False)
+                try:
+                    previous, _ = metadata(old.stdout)
+                    was_managed = previous.get('schema') == POLICY['document_schema']
+                except ValueError:
+                    was_managed = False
+                organizational = (
+                    Path(name).name in discovery['organizational_names']
+                    or name in discovery['organizational_paths']
+                    or any(name.startswith(prefix) for prefix in discovery['organizational_prefixes'])
+                    or re.fullmatch(discovery['ticket_pattern'], name) is not None)
+                if was_managed or not organizational:
+                    selected.add(name)
     for name in files:
         if not name.endswith('.md') or safe_path(root, name) is None:
             continue

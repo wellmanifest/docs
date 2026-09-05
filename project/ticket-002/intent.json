@@ -1,0 +1,74 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-002",
+  "summary": "Reject undeclared new documentation and metadata removal",
+  "workstream": "integration",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "docs/standard/check.py",
+    "docs/standard/tests/test_check.py",
+    "docs/standard/POLICY.md",
+    "docs/standard/policy.json",
+    "project/ticket-002/**"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "fdb0fcaa7c606dc2503cabb71eff64d5f86ee659",
+    "targetBranch": "main",
+    "outcome": "Publish base-aware documentation discovery that rejects new misplaced reports and metadata removal",
+    "nonGoals": [
+      "Fleet migration",
+      "Changing runtime authority"
+    ],
+    "complexity": "S",
+    "estimatedMinutes": 30,
+    "budgets": {
+      "maxImplementationFiles": 4,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Extend the existing trusted checker using Git base comparison and explicit organizational-file exemptions",
+      "components": [
+        {
+          "name": "documentation-policy",
+          "paths": [
+            "docs/standard/**"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Restore the previous immutable standard pin."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python3 -m unittest discover -s docs/standard/tests",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "project/ticket-002/README.md"
+      }
+    ]
+  }
+}
