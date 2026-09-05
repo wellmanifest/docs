@@ -1,0 +1,86 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-001",
+  "summary": "Create a documentation placement and refactoring standard applicable to every subactor repository",
+  "workstream": "integration",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "docs/**",
+    "README.md",
+    "CHANGELOG.md",
+    "project/ticket-001/**",
+    ".governance/manifest.json",
+    ".governance/required-checks.json",
+    ".subactor/.gitignore"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "f64de5806577769672ebc1730d2e144b4c7671ec",
+    "targetBranch": "main",
+    "outcome": "Create a documentation placement and refactoring standard applicable to every subactor repository",
+    "nonGoals": [
+      "No changes to runtime authority",
+      "No automatic relocation of historical logs or backup bundles"
+    ],
+    "complexity": "L",
+    "estimatedMinutes": 30,
+    "budgets": {
+      "maxImplementationFiles": 15,
+      "maxAffectedComponents": 2,
+      "maxPublicInterfaceChanges": 1,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "One normative policy and project-local documents, with a pure standard-library conformance checker and Subactor namespace profile",
+      "components": [
+        {
+          "name": "documentation-policy",
+          "paths": [
+            "docs/**"
+          ]
+        },
+        {
+          "name": "pack-facade",
+          "paths": [
+            "README.md",
+            "CHANGELOG.md",
+            ".governance/manifest.json",
+            ".governance/required-checks.json",
+            ".subactor/.gitignore"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert adoption references; preserve documents and old revision readers."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python3 -m unittest discover -s docs/standard/tests",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "project/ticket-001/README.md"
+      }
+    ]
+  }
+}

@@ -34,7 +34,8 @@
         "models/**",
         "proto/**",
         "README.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        ".subactor/.gitignore"
       ],
       "workstream": "integration"
     },
@@ -100,7 +101,8 @@
           "models/**",
           "proto/**",
           "README.md",
-          "CHANGELOG.md"
+          "CHANGELOG.md",
+          ".subactor/.gitignore"
         ]
       },
       "interfaces": {

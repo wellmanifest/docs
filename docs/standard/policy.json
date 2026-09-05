@@ -1,0 +1,32 @@
+{
+  "schema": "wellmanifest.docs/policy/v1",
+  "id": "wellmanifest/docs",
+  "version": "0.1.0",
+  "document_schema": "wellmanifest.docs/document/v1",
+  "adoption_schema": "wellmanifest.docs/adoption/v1",
+  "profile": {
+    "required_namespace": "subactor/",
+    "docs_root": "docs",
+    "index": "docs/README.md",
+    "cross_repository_home": "subactor/docs",
+    "repository_overrides": {
+      "subactor/docs": {"docs_root": ".", "index": "README.md", "prefix": "architecture"}
+    }
+  },
+  "kinds": {
+    "information": {"directory": "information", "sections": ["purpose", "scope", "evidence", "content", "limitations", "next_actions"]},
+    "analysis": {"directory": "analysis", "sections": ["question", "scope", "method", "evidence", "facts", "hypotheses", "limitations", "recommendations"]},
+    "refactoring-plan": {"directory": "refactoring", "sections": ["goal", "current_state", "scope", "non_goals", "evidence", "target_design", "migration", "acceptance", "validation", "rollback", "risks", "ownership"]},
+    "decision": {"directory": "decisions", "sections": ["context", "evidence", "alternatives", "decision", "consequences", "validation", "supersedes"]}
+  },
+  "metadata": {
+    "schema": "string", "id": "slug", "kind": "kind", "version": "positive_integer",
+    "title": "string", "status": "status", "owner": "string",
+    "created": "date", "updated": "date", "review_after": "date",
+    "source_revision": "sha40", "affected_repositories": "repositories", "evidence": "references"
+  },
+  "statuses": ["draft", "proposed", "accepted", "implemented", "superseded"],
+  "forbidden_delivery_roots": ["project/", ".subactor/", ".git/", ".local/", "/tmp/"],
+  "adoption_scope": "managed-and-declared-documents",
+  "authority": "Documentation never grants execution, secret access, deployment or merge authority."
+}
