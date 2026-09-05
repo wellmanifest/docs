@@ -151,6 +151,58 @@ class Conformance(unittest.TestCase):
         self.write_doc()
         self.assertNotIn('DOCS_VERSION', self.codes(base=base))
 
+    def commit_base(self):
+        self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                 'commit', '-qm', 'baseline')
+        return self.git('rev-parse', 'HEAD')
+
+    def test_new_plain_report_is_discovered_from_base(self):
+        base = self.commit_base()
+        (self.root / 'REPORT.md').write_text('# Analysis without metadata\n')
+        self.git('add', 'REPORT.md')
+        result = self.check(base=base)
+        self.assertFalse(result['ok'])
+        self.assertTrue(any(x['path'] == 'REPORT.md' and x['code'] == 'DOCS_METADATA'
+                            for x in result['findings']))
+
+    def test_metadata_removal_is_rejected_without_declaration(self):
+        base = self.commit_base()
+        (self.root / self.name).write_text('# Plain replacement\n')
+        self.assertIn('DOCS_METADATA', self.codes(base=base))
+
+    def test_symlink_replacement_is_rejected_without_declaration(self):
+        base = self.commit_base()
+        (self.root / self.name).unlink()
+        (self.root / self.name).symlink_to(self.root / 'docs/README.md')
+        self.git('add', self.name)
+        self.assertIn('DOCS_LOCATION', self.codes(base=base))
+
+    def test_unchanged_legacy_is_preserved_but_edit_requires_migration(self):
+        path = self.root / 'legacy.md'
+        path.write_text('# Historical analysis\n')
+        self.git('add', '.')
+        base = self.commit_base()
+        self.assertTrue(self.check(base=base)['ok'])
+        path.write_text('# Changed analysis\n')
+        self.assertIn('DOCS_METADATA', self.codes(base=base))
+
+    def test_organizational_files_are_exempt_but_explicit_delivery_is_not(self):
+        base = self.commit_base()
+        for name in ['README.md', 'AGENTS.md', 'project/ticket-002/README.md']:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('# Organizational file\n')
+        self.git('add', '.')
+        self.assertTrue(self.check(base=base)['ok'])
+        self.assertIn('DOCS_METADATA', self.codes(base=base, deliverables=['README.md']))
+
+    def test_renamed_legacy_report_requires_migration(self):
+        (self.root / 'legacy.md').write_text('# Old report\n')
+        self.git('add', '.')
+        base = self.commit_base()
+        self.git('mv', 'legacy.md', 'REPORT.md')
+        self.assertIn('DOCS_METADATA', self.codes(base=base))
+
     def test_templates_cover_every_required_section(self):
         for kind, spec in checker.POLICY['kinds'].items():
             text = (checker.PACK / 'templates' / (kind + '.md')).read_text()

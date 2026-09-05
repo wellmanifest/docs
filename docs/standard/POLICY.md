@@ -1,4 +1,4 @@
-# Standard informacji i planów refaktoryzacji — wellmanifest/docs 0.1.0
+# Standard informacji i planów refaktoryzacji — wellmanifest/docs 0.1.1
 
 Słowa MUSI, NIE WOLNO i POWINIEN określają odpowiednio wymaganie, zakaz i zalecenie. `policy.json` jest kanonicznym katalogiem ścieżek, metadanych i sekcji; ten dokument opisuje ich znaczenie. HOME standardu: wellmanifest; projekty Subactor ADOPT ten pakiet i pozostają właścicielami swojego kodu oraz informacji.
 
@@ -65,3 +65,10 @@ Przypięcie zawiera `schema`, `repository`, `standard`, `source_revision` i `pol
 Adopcja przebiega: audyt read-only → wskazanie właściciela dokumentacji → bounded PR z manifestem, indeksem i podłączeniem istniejącej bramy → weryfikacja → chroniona publikacja. Nowe repo otrzymuje to w seedzie; istniejące w normalnej zmianie integracyjnej. Fleet audit raportuje brak adopcji jako brak, nie jako zgodność.
 
 Checker obejmuje dokumenty tego profilu w Git oraz jawnie wskazane `--deliverable`. Nie widzi wszystkich plików zapisanych przez agenta poza repozytorium i nie dowodzi prawdziwości treści. Dlatego deklaracja ścieżki przed pracą, przegląd merytoryczny i sprawdzenie publikacji pozostają konieczne. Zachowanie historycznych formatów nie uprawnia do omijania profilu dla nowego rezultatu.
+
+
+### Odkrywanie zmian względem bazy
+
+Brama publikacji MUSI przekazać zaufany `--base`. Checker obejmuje również każdy nowy lub zmieniony, śledzony plik Markdown względem tej bazy, nawet bez metadanych. Niezmienione dokumenty historyczne pozostają poza migracją. Zastąpienie dokumentu dowiązaniem lub usunięcie metadanych nie usuwa go z kontroli.
+
+`policy.json/discovery` jawnie wyłącza pliki organizacyjne: indeksy README, instrukcje agentów, changelog, TODO, konwencjonalne instrukcje współpracy i bezpieczeństwa, katalogi konfiguracji governance/CI/hostów oraz bezpośrednie pliki Markdown ticketów. Wyjątki dotyczą tylko automatycznego odkrywania: dokument rozpoznany jako zarządzany obecnie lub w bazie, albo wskazany przez `--deliverable`, nadal podlega pełnej kontroli. Nie wolno używać pliku organizacyjnego jako jedynego miejsca raportu końcowego. Kontrola bez bazy jest audytem istniejącego profilu, nie pełną bramą nowych rezultatów; nie wykrywa nieśledzonych plików bez jawnego `--deliverable`.
