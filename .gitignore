@@ -1,0 +1,13 @@
+/worktrees/
+/.subactor/leases/
+/.subactor/sessions/
+/.subactor/recovery/
+/.subactor/receipts/
+/.subactor/cache/
+/.subactor/snapshots/
+__pycache__/
+*.pyc
+.venv/
+.env
+*.pem
+*.bundle
