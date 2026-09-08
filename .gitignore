@@ -11,3 +11,6 @@ __pycache__/
 .env
 *.pem
 *.bundle
+
+# Repository-local worktrees and operational state
+/.worktrees/
