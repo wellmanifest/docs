@@ -17,8 +17,12 @@ HOME: `wellmanifest` · SHAPE: `domain_pack` · ADOPT przez konsumentów: `wellm
 Przed pracą określ `repozytorium + rodzaj dokumentu + ścieżkę kanoniczną`.
 
 Przykład: `subactor/core:docs/refactoring/publication-controller.md`.
-Raport przekrojowy ma jedno źródło w `subactor/docs`, np.
-`architecture/analysis/subactor-refactoring.md`; pozostałe projekty linkują do niego.
+Raport organizacyjny (`scope: organization`) ma jedno źródło w `[org]/report`, np.
+`subactor/report:docs/analysis/subactor-fleet-audit-2026-09-13.md`.
+Raport konkretnego repozytorium (`scope: repository`) pozostaje u jego właściciela,
+także gdy wskazuje zależności między repozytoriami. Pole `owner` zawiera dokładne `org/repo`.
+Istniejącego repozytorium nie tworzymy ponownie; brak repo rozwiązuje uprawniony
+proces tworzenia z przyjętymi standardami, nie sam checker.
 Końcowego wyniku nie wolno pozostawić wyłącznie w `/tmp`, `$HOME/.local/state`,
 czacie ani katalogu ticketu. Nie wolno publikować backupów i transkrypcji jako dokumentacji.
 
@@ -39,6 +43,20 @@ czacie ani katalogu ticketu. Nie wolno publikować backupów i transkrypcji jako
 
 3. Dodaj indeks `docs/README.md`, odnośnik z README projektu oraz instrukcję agenta wskazującą przypiętą rewizję. W `subactor/docs` indeksem jest główny README.
 4. Korzystaj z szablonów i dodaj do istniejącego CI/OneDev poniższe sprawdzenie. `DOCS_STANDARD_ROOT` oraz `DOCS_STANDARD_REVISION` muszą pochodzić z zaufanej konfiguracji wykonawcy. Nie pobieraj i nie wykonuj checkera wskazanego przez niezaufany PR.
+
+Przed generowaniem, po rozwiązaniu standardu i artefaktu w istniejącym rejestrze:
+
+```bash
+python3 "$DOCS_STANDARD_ROOT/docs/standard/check.py" \
+  --root . --standard-revision "$DOCS_STANDARD_REVISION" --prepare \
+  --scope repository --kind refactoring-plan --id publication-controller \
+  --deliverable docs/refactoring/publication-controller.md
+```
+
+Generator MUSI zatrzymać się przy błędzie. Dla raportu organizacyjnego uruchom
+preflight w checkoutcie `org/report` z `--scope organization`. JSON planu opisuje
+miejsce i przypięcie; nie udziela uprawnień, nie tworzy repozytorium ani pliku.
+Po zapisaniu i dodaniu wyniku do Git uruchom kontrolę końcową:
 
 ```bash
 python3 "$DOCS_STANDARD_ROOT/docs/standard/check.py" \

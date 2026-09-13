@@ -2,6 +2,7 @@ import datetime
 import importlib.util
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -208,8 +209,121 @@ class Conformance(unittest.TestCase):
             text = (checker.PACK / 'templates' / (kind + '.md')).read_text()
             meta, body = checker.metadata(text)
             self.assertEqual(meta['kind'], kind)
-            self.assertEqual(set(meta), set(checker.POLICY['metadata']))
+            self.assertEqual(set(meta), set(checker.POLICY['metadata']) | {'scope'})
             self.assertEqual(set(checker.MARKER.findall(body)), set(spec['sections']))
+
+    def explicit_scope(self, scope='repository', repository='subactor/example'):
+        self.git('remote', 'set-url', 'origin', 'https://github.com/' + repository + '.git')
+        self.adoption['repository'] = repository
+        self.write_adoption()
+        self.meta.update(scope=scope, owner=repository)
+        self.write_doc()
+
+    def prepare(self, **kwargs):
+        options = dict(kind='analysis', slug='new-report', scope='repository',
+                       destination='docs/analysis/new-report.md')
+        options.update(kwargs)
+        return checker.prepare_delivery(self.root, REV, **options)
+
+    def test_report_home_resolves_any_organization(self):
+        for org in ['subactor', 'semcod', 'wellmanifest']:
+            self.assertEqual(checker.report_home(org + '/core', 'organization'), org + '/report')
+            self.assertEqual(checker.report_home(org + '/core', 'repository'), org + '/core')
+        for repo, scope in [(None, 'repository'), ('invalid', 'repository'), ('subactor/core', 'guess')]:
+            with self.assertRaises(ValueError):
+                checker.report_home(repo, scope)
+
+    def test_repository_owned_report_can_reference_other_repositories(self):
+        self.explicit_scope()
+        self.meta['affected_repositories'].append('subactor/other')
+        self.write_doc()
+        self.assertTrue(self.check()['ok'])
+
+    def test_organization_report_requires_report_repository(self):
+        self.explicit_scope('organization')
+        self.assertIn('DOCS_OWNER', self.codes())
+        self.explicit_scope('organization', 'semcod/report')
+        self.assertTrue(self.check()['ok'])
+
+    def test_explicit_owner_and_scope_are_validated(self):
+        self.explicit_scope()
+        self.meta['owner'] = 'role:component-owner'
+        self.write_doc()
+        self.assertIn('DOCS_OWNER', self.codes())
+        self.meta['scope'] = ['organization']
+        self.write_doc()
+        self.assertIn('DOCS_METADATA', self.codes())
+
+    def test_legacy_scope_is_preserved_until_changed(self):
+        base = self.commit_base()
+        self.assertTrue(self.check(base=base)['ok'])
+        self.meta.update(version=2, title='New findings')
+        self.write_doc()
+        self.assertIn('DOCS_SCOPE', self.codes(base=base))
+        self.explicit_scope()
+        self.assertTrue(self.check(base=base)['ok'])
+
+    def test_scope_removal_and_new_unscoped_document_fail(self):
+        self.explicit_scope()
+        self.git('add', '.')
+        base = self.commit_base()
+        del self.meta['scope']
+        self.meta['version'] = 2
+        self.write_doc()
+        self.assertIn('DOCS_SCOPE', self.codes(base=base))
+        self.meta['id'] = 'new-report'
+        self.name = 'docs/refactoring/new-report.md'
+        self.write_doc()
+        self.git('add', '.')
+        self.assertTrue(any(f['path'] == self.name and f['code'] == 'DOCS_SCOPE'
+                            for f in self.check(base=base)['findings']))
+
+    def test_preflight_is_read_only_and_deterministic(self):
+        before = self.git('status', '--porcelain')
+        result = self.prepare()
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result, self.prepare())
+        self.assertEqual(result['plan']['owner'], 'subactor/example')
+        self.assertEqual(result['plan']['authority'], 'read-only-placement-evidence')
+        self.assertFalse((self.root / 'docs/analysis/new-report.md').exists())
+        self.assertEqual(before, self.git('status', '--porcelain'))
+
+    def test_preflight_blocks_wrong_owner_missing_adoption_and_index(self):
+        self.assertFalse(self.prepare(scope='organization')['ok'])
+        (self.root / '.governance/docs.json').unlink()
+        self.assertFalse(self.prepare()['ok'])
+        self.write_adoption()
+        self.git('rm', '--cached', 'docs/README.md')
+        self.assertFalse(self.prepare()['ok'])
+
+    def test_preflight_blocks_external_traversal_and_symlink_paths(self):
+        for destination in ['/tmp/report.md', '../report.md', 'docs/analysis/../analysis/new-report.md', 'REPORT.md']:
+            self.assertFalse(self.prepare(destination=destination)['ok'], destination)
+        (self.root / 'docs/analysis').symlink_to(self.root / 'docs/refactoring', target_is_directory=True)
+        self.assertFalse(self.prepare()['ok'])
+
+    def test_preflight_organization_report_passes_in_owning_repository(self):
+        self.explicit_scope('organization', 'subactor/report')
+        self.assertTrue(self.prepare(scope='organization')['ok'])
+
+    def test_missing_root_or_origin_fails_closed(self):
+        result = checker.prepare_delivery(self.root / 'absent', REV, 'analysis', 'new-report',
+                                          'repository', 'docs/analysis/new-report.md')
+        self.assertFalse(result['ok'])
+        self.explicit_scope()
+        self.git('remote', 'remove', 'origin')
+        self.assertFalse(self.check()['ok'])
+
+    def test_preflight_cli_requires_complete_declaration(self):
+        command = [sys.executable, str(checker.PACK / 'check.py'), '--root', str(self.root),
+                   '--standard-revision', REV, '--prepare']
+        invalid = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(invalid.returncode, 2)
+        result = subprocess.run(command + ['--kind', 'analysis', '--id', 'new-report',
+                               '--scope', 'repository', '--deliverable', 'docs/analysis/new-report.md'],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)['ok'])
 
 
 if __name__ == '__main__':

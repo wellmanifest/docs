@@ -1,4 +1,4 @@
-# Standard informacji i planów refaktoryzacji — wellmanifest/docs 0.1.1
+# Standard informacji i planów refaktoryzacji — wellmanifest/docs 0.2.0
 
 Słowa MUSI, NIE WOLNO i POWINIEN określają odpowiednio wymaganie, zakaz i zalecenie. `policy.json` jest kanonicznym katalogiem ścieżek, metadanych i sekcji; ten dokument opisuje ich znaczenie. HOME standardu: wellmanifest; projekty Subactor ADOPT ten pakiet i pozostają właścicielami swojego kodu oraz informacji.
 
@@ -22,7 +22,11 @@ Domyślne lokalizacje wewnątrz repozytorium:
 
 Identyfikator jest stabilny; poprawki aktualizują wersję dokumentu zamiast tworzyć REPORT-final-v2-new.md. Zmiana znaczenia lub aktualizacja ustaleń MUSI zwiększyć `version` i zaktualizować `updated`; historyczny stan pozostaje w Git. Repozytorium może mieć wcześniejszy system wersjonowania append-only — zachowuje go i wskazuje kanoniczny dokument, bez przepisywania starych wersji.
 
-Wynik przekrojowy dotyczący kilku repozytoriów ma jednego właściciela: `subactor/docs`. W tym dedykowanym repo katalog główny pełni rolę dokumentacji: używa się `architecture/{information,analysis,refactoring,decisions}/<id>.md` i indeksu `README.md`. Pozostałe repozytoria zawierają odnośnik do kanonicznego dokumentu, nie jego pełne kopie. Dokument lokalnej zmiany może wskazywać zależności z innych repo bez przejmowania ich odpowiedzialności.
+Nowy lub merytorycznie zmieniany wynik MUSI deklarować `scope` i dokładny `owner` w postaci `org/repo`. Dla `scope: repository` właścicielem pozostaje konkretne repozytorium, również gdy analiza wskazuje zależności z innych repo. Dla `scope: organization` właścicielem jest `[org]/report`, np. `subactor/report:docs/analysis/subactor-fleet-audit-2026-09-13.md`. Liczba `affected_repositories` nie zastępuje decyzji o odpowiedzialności. Raport kilku organizacji musi mieć wskazaną organizację odpowiedzialną; nie wolno zgadywać właściciela ani powielać całego raportu.
+
+Przed utworzeniem repozytorium operator MUSI sprawdzić jego istnienie i rejestr artefaktów. Błąd dostępu lub sieci nie jest dowodem nieistnienia. Jeśli `[org]/report` naprawdę nie istnieje, tworzy je wyłącznie uprawniony proces w zaakceptowanej widoczności, z wymaganym seedem standardów i chronioną publikacją. Checker nie tworzy repozytoriów. Brak uprawnienia, nieustalony właściciel albo brak adopcji zatrzymuje generowanie trwałego wyniku; nie uprawnia do publikowania go w `/tmp`.
+
+Historyczne dokumenty przekrojowe w `subactor/docs` zachowują dotychczasowe ścieżki `architecture/{information,analysis,refactoring,decisions}/<id>.md` i indeks `README.md`. Brak `scope` jest tolerowany wyłącznie przy audycie lub dla dokumentu niezmienionego względem zaufanej bazy. Przy zmianie trzeba ustalić aktualnego właściciela: dokument repozytorium wiedzy może pozostać lokalny, raport całej organizacji trafia do `org/report` z odnośnikiem migracyjnym. Nie kasuje się historii ani nie wykonuje masowej migracji archiwów.
 
 ## DOCS-003 — Dokumentacja a dane robocze
 
@@ -65,6 +69,14 @@ Przypięcie zawiera `schema`, `repository`, `standard`, `source_revision` i `pol
 Adopcja przebiega: audyt read-only → wskazanie właściciela dokumentacji → bounded PR z manifestem, indeksem i podłączeniem istniejącej bramy → weryfikacja → chroniona publikacja. Nowe repo otrzymuje to w seedzie; istniejące w normalnej zmianie integracyjnej. Fleet audit raportuje brak adopcji jako brak, nie jako zgodność.
 
 Checker obejmuje dokumenty tego profilu w Git oraz jawnie wskazane `--deliverable`. Nie widzi wszystkich plików zapisanych przez agenta poza repozytorium i nie dowodzi prawdziwości treści. Dlatego deklaracja ścieżki przed pracą, przegląd merytoryczny i sprawdzenie publikacji pozostają konieczne. Zachowanie historycznych formatów nie uprawnia do omijania profilu dla nowego rezultatu.
+
+### Brama przed generowaniem i operacją
+
+Generator lub agent MUSI najpierw rozwiązać obowiązujące standardy i istniejący artefakt w rejestrze, następnie wywołać zaufany checker z `--prepare --root ... --scope ... --kind ... --id ... --deliverable ...`. Wynik `ok: false` lub niezerowy kod zatrzymuje generator przed zapisem raportu. Kontrola wymaga przypięcia adopcji, właściwego repozytorium, śledzonego indeksu i bezpiecznej ścieżki bez dowiązań. Wynik `delivery-plan/v1` zawiera właściciela, ścieżkę, pin i digest polityki oraz digest planu.
+
+Plan jest dowodem wyboru miejsca, NIE uprawnieniem do operacji i NIE poświadczeniem niezmienności środowiska. Konsument wiąże go z bieżącym zadaniem, sprawdza ponownie przed zapisem po zmianie wejść, nie nadpisuje istniejącego raportu bez kontroli wersji i po generowaniu uruchamia pełny checker z zaufaną bazą i jawnym rezultatem. Odbiór wymaga osobno chronionej publikacji. Błąd późniejszej kontroli oznacza niedostarczony rezultat, nawet jeśli plik został zapisany lokalnie.
+
+Operacje deploy, merge, czyszczenie, publikacja i generowanie artefaktów nietekstowych nadal wymagają właściwego standardu domenowego, intencji i uprawnienia. DOCS nie zastępuje tych bram. Instrukcja w AGENTS albo nowy parametr CLI nie jest dowodem wdrożenia: odbiór automatyzacji MUSI wykazać, że konsument odmawia zapisu po błędzie preflight i odmawia publikacji po błędzie kontroli końcowej. Raport adopcji odróżnia opublikowaną regułę, podłączony generator i chronioną bramę każdego konsumenta.
 
 
 ### Odkrywanie zmian względem bazy

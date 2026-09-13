@@ -20,6 +20,8 @@ MARKER = re.compile(r'<!-- docs:section ([a-z_]+) -->')
 
 
 def origin(root):
+    if not Path(root).is_dir():
+        return None
     result = subprocess.run(['git', 'remote', 'get-url', 'origin'], cwd=root,
                             capture_output=True, text=True, check=False)
     match = re.search(r'github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?$', result.stdout.strip())
@@ -27,6 +29,8 @@ def origin(root):
 
 
 def tracked(root):
+    if not Path(root).is_dir():
+        raise ValueError('DOCS_GIT_REQUIRED')
     result = subprocess.run(['git', 'ls-files', '-z'], cwd=root, capture_output=True, check=False)
     if result.returncode:
         raise ValueError('DOCS_GIT_REQUIRED')
@@ -73,6 +77,8 @@ def valid_value(kind, value):
         return bool(SHA.fullmatch(value))
     if kind == 'kind':
         return value in POLICY['kinds']
+    if kind == 'scope':
+        return value in POLICY['delivery_scopes']
     if kind == 'status':
         return value in POLICY['statuses']
     if kind == 'date':
@@ -99,6 +105,52 @@ def safe_path(root, path):
     except ValueError:
         return None
     return relative
+
+
+def report_home(repository, scope):
+    """Resolve ownership only; this never creates a repository or grants writes."""
+    if not isinstance(repository, str) or not REPO.fullmatch(repository):
+        raise ValueError('DOCS_REPOSITORY_REQUIRED')
+    if scope not in POLICY['delivery_scopes']:
+        raise ValueError('DOCS_SCOPE_REQUIRED')
+    if scope == 'organization':
+        return repository.split('/')[0] + '/' + POLICY['profile']['organization_report_repository']
+    return repository
+
+
+def prepare_delivery(root, revision, kind, slug, scope, destination):
+    """Fail closed before generation; consumers must require ok before writing."""
+    root = Path(root).resolve()
+    repository = origin(root)
+    if not SHA.fullmatch(revision):
+        raise ValueError('Trusted standard revision must be a full immutable SHA')
+    findings = []
+    def fail(code, message):
+        findings.append({'code': code, 'message': message})
+    try:
+        owner = report_home(repository, scope)
+    except ValueError as error:
+        return {'ok': False, 'findings': [{'code': str(error)}]}
+    if repository != owner:
+        fail('DOCS_OWNER', 'Open the owning repository first: ' + owner)
+    if kind not in POLICY['kinds'] or not valid_value('slug', slug):
+        fail('DOCS_METADATA', 'A known kind and stable slug are required')
+        return {'ok': False, 'repository': repository, 'owner': owner, 'findings': findings}
+    expected_path, index = layout(owner, kind, slug)
+    relative = safe_path(root, destination)
+    if relative != expected_path or safe_path(root, expected_path) is None:
+        fail('DOCS_LOCATION', 'Expected repository-relative destination: ' + expected_path.as_posix())
+    # Reuse adoption, tracked index and existing document validation. Do not
+    # declare the not-yet-generated document, which is intentionally absent.
+    existing = check(root, revision)
+    findings.extend(existing['findings'])
+    plan = {'schema': 'wellmanifest.docs/delivery-plan/v1', 'repository': repository,
+            'owner': owner, 'scope': scope, 'kind': kind, 'id': slug,
+            'path': expected_path.as_posix(), 'index': index,
+            'standard_revision': revision, 'policy_sha256': POLICY_SHA256,
+            'authority': 'read-only-placement-evidence'}
+    return {'ok': not findings, 'plan': plan, 'findings': findings,
+            'plan_sha256': hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()}
 
 
 def check(root, revision, deliverables=(), today=None, base=None):
@@ -199,7 +251,11 @@ def check(root, revision, deliverables=(), today=None, base=None):
                 except ValueError:
                     pass
         fields = POLICY['metadata']
-        if set(meta) != set(fields) or any(not valid_value(t, meta.get(k)) for k, t in fields.items()) or meta.get('schema') != POLICY['document_schema']:
+        optional = POLICY.get('optional_metadata', {})
+        if (not set(fields) <= set(meta) or not set(meta) <= set(fields) | set(optional)
+                or any(not valid_value(t, meta.get(k)) for k, t in fields.items())
+                or any(not valid_value(optional[k], meta[k]) for k in set(meta) & set(optional))
+                or meta.get('schema') != POLICY['document_schema']):
             fail('DOCS_METADATA', name, 'Metadata fields, types or values violate document/v1')
             continue
         if meta['id'] in ids:
@@ -208,8 +264,19 @@ def check(root, revision, deliverables=(), today=None, base=None):
         expected_path, index = layout(repository, meta['kind'], meta['id'])
         if Path(name) != expected_path:
             fail('DOCS_LOCATION', name, 'Expected ' + expected_path.as_posix())
-        if meta['affected_repositories'] != [repository] and repository != POLICY['profile']['cross_repository_home']:
+        scope = meta.get('scope')
+        if scope is not None:
+            if not repository or meta['owner'] != repository or report_home(repository, scope) != repository:
+                fail('DOCS_OWNER', name, 'Explicit delivery owner must match its repository; organization scope requires org/report')
+        elif meta['affected_repositories'] != [repository] and repository != POLICY['profile']['cross_repository_home']:
             fail('DOCS_OWNER', name, 'Cross-repository deliverables belong to subactor/docs; reference dependencies in scope instead')
+        # Preserve historical metadata during audits. New or changed results
+        # must state scope explicitly; deleting scope cannot restore an exemption.
+        if scope is None and base:
+            previous_text = subprocess.run(['git', 'show', base + ':' + name], cwd=root,
+                                           capture_output=True, text=True, check=False)
+            if previous_text.returncode or previous_text.stdout != text:
+                fail('DOCS_SCOPE', name, 'New or changed deliverables require explicit repository or organization scope')
         if not meta['created'] <= meta['updated'] <= meta['review_after']:
             fail('DOCS_DATES', name, 'Expected created <= updated <= review_after')
         if dt.date.fromisoformat(meta['review_after']) < (today or dt.date.today()):
@@ -243,8 +310,18 @@ def main():
     p.add_argument('--standard-revision', required=True, help='Full revision selected by trusted CI, never by the candidate document')
     p.add_argument('--base', help='Trusted base SHA for version-increment checks')
     p.add_argument('--deliverable', action='append', default=[])
+    p.add_argument('--prepare', action='store_true', help='Read-only mandatory pre-generation placement check')
+    p.add_argument('--kind', choices=list(POLICY['kinds']))
+    p.add_argument('--id', dest='slug')
+    p.add_argument('--scope', choices=POLICY['delivery_scopes'])
     args = p.parse_args()
-    if args.fleet:
+    if args.prepare:
+        if args.fleet or args.base or len(args.deliverable) != 1 or not all([args.kind, args.slug, args.scope]):
+            p.error('--prepare requires --root, --kind, --id, --scope and exactly one --deliverable, without --base')
+        result = prepare_delivery(args.root, args.standard_revision, args.kind, args.slug, args.scope, args.deliverable[0])
+    elif args.kind or args.slug or args.scope:
+        p.error('--kind, --id and --scope require --prepare')
+    elif args.fleet:
         if args.deliverable or args.base:
             p.error('--deliverable applies to a single --root')
         reports = [check(path, args.standard_revision) for path in sorted(args.fleet.iterdir())
