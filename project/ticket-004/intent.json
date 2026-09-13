@@ -1,0 +1,85 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-004",
+  "summary": "Resolve report ownership before generation and enforce organization report homes",
+  "workstream": "integration",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "requested"
+  },
+  "allowedPaths": [
+    "project/ticket-004/**",
+    "project/TICKETS.md",
+    "TODO.md",
+    "docs/standard/**",
+    "README.md",
+    "VERSION"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "25cf4cbe0124ce41bff7b1497badaa2b3662b707",
+    "targetBranch": "main",
+    "outcome": "Publish a standard-owned report placement preflight and conformance checks: repository-owned reports stay with their owner, organization reports belong to org/report, final reports cannot remain only in temporary storage.",
+    "nonGoals": [
+      "No new duplicate standard repository.",
+      "No automatic repository creation, publication grants or wholesale migration of historical reports.",
+      "No claim of organization-wide enforcement without consumer receipts."
+    ],
+    "complexity": "L",
+    "estimatedMinutes": 120,
+    "budgets": {
+      "maxImplementationFiles": 15,
+      "maxAffectedComponents": 3,
+      "maxPublicInterfaceChanges": 2,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Extend wellmanifest/docs rather than create a competing standard. Add explicit delivery scope, generic org/report resolution, read-only fail-closed preflight and backward-compatible historical document inspection.",
+      "components": [
+        {
+          "name": "documentation-standard",
+          "paths": [
+            "docs/standard/**"
+          ]
+        },
+        {
+          "name": "package-description",
+          "paths": [
+            "README.md",
+            "VERSION"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [
+        "Optional scope metadata and preflight CLI"
+      ],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Consumers retain their previous immutable standard pin; previous report history remains available in Git."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python3 -m unittest discover -s docs/standard/tests -v",
+          "./project/governance-check.sh --base origin/main --head HEAD --actor agent"
+        ],
+        "evidence": "37 unit tests pass. Exact-head governance follows the material commit; historical ticket-003 terminal state restored from authenticated GitHub merge and verified Git ancestry."
+      }
+    ]
+  }
+}

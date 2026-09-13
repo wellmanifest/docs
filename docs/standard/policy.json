@@ -1,7 +1,7 @@
 {
   "schema": "wellmanifest.docs/policy/v1",
   "id": "wellmanifest/docs",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "document_schema": "wellmanifest.docs/document/v1",
   "adoption_schema": "wellmanifest.docs/adoption/v1",
   "profile": {
@@ -9,6 +9,7 @@
     "docs_root": "docs",
     "index": "docs/README.md",
     "cross_repository_home": "subactor/docs",
+    "organization_report_repository": "report",
     "repository_overrides": {
       "subactor/docs": {
         "docs_root": ".",
@@ -87,6 +88,10 @@
     "affected_repositories": "repositories",
     "evidence": "references"
   },
+  "optional_metadata": {
+    "scope": "scope"
+  },
+  "delivery_scopes": ["repository", "organization"],
   "statuses": [
     "draft",
     "proposed",
