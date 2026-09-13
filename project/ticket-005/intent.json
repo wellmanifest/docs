@@ -1,0 +1,35 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-005",
+  "summary": "Adopt published governance 0.20.26 without changing Docs behavior",
+  "workstream": "integration",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": ["project/ticket-005/**", "project/TICKETS.md", ".governance/manifest.json", ".governance/manifest.base.json", ".governance/manifest.lock.json", ".governance/package-manifest.json"],
+  "forbiddenPaths": ["project/ticket-*/user-*.md"],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "4bd5096e59a4a4b2022949b1a49cba2eb94ed424",
+    "targetBranch": "main",
+    "standardAdoption": {"sourceRepository": "wellmanifest/new-project", "fromRevision": "e65857ea2f62b20e4b830e3c5f611878bf31bb25", "toRevision": "8d86cd61404d51809532a8292ce9c0cc02ed6157"},
+    "outcome": "Adopt and independently publish the latest final governance package 0.20.26, preserving the Docs 0.2.0 contract and existing repository settings.",
+    "nonGoals": ["No changes to Docs policy, generator contract or test semantics", "No unreviewed release, downgrade, default-branch push or automatic merge", "No deletion or overwrite of historical or foreign workspaces"],
+    "complexity": "L", "estimatedMinutes": 90,
+    "budgets": {"maxImplementationFiles": 15, "maxAffectedComponents": 2, "maxPublicInterfaceChanges": 0, "maxRuntimeDependencies": 0},
+    "architecture": {
+      "status": "accepted", "decision": "Use Goal atomic published adoption. Its proof covers the managed package; this integration ticket owns only instance manifests and tracking outside that proof. Freshness observations remain separate from authorization and deployed automation.",
+      "components": [{"name": "governance-instance", "paths": [".governance/manifest.json", ".governance/manifest.base.json", ".governance/manifest.lock.json", ".governance/package-manifest.json", "project/**"]}],
+      "responsibilityChanges": false, "interfaceChanges": [], "dataChanges": ["Governance pin 0.20.14 to 0.20.26"],
+      "ui": {"impact": "none", "states": [], "evidence": []},
+      "rollback": "Revert the reviewed adoption commit through protected publication; no existing workspace is relocated or deleted."
+    },
+    "runtimeDependencies": [],
+    "validation": [{"criterion": "AC-01", "commands": ["goal governance adopt --source-revision 8d86cd61404d51809532a8292ce9c0cc02ed6157 --check", "./project/governance-check.sh --base origin/main --head HEAD --actor agent", "python3 -m unittest discover -s docs/standard/tests -v"], "evidence": "Pending exact-head validation."}]
+  }
+}
