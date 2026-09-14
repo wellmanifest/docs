@@ -1,5 +1,7 @@
 import json
 import os
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 import test_check
@@ -86,6 +88,19 @@ class ProfileIntegration(unittest.TestCase):
 
     def test_valid_feature_and_plain_v1_coexist(self):
         self.assertEqual(self.codes(), set())
+
+    def test_public_cli_requires_explicit_verified_runtime(self):
+        command = [sys.executable, str(checker.PACK / "check.py"),
+                   "--root", str(self.root), "--standard-revision", test_check.REV]
+        for runtime, expected in [(False, 1), (True, 0)]:
+            with self.subTest(runtime=runtime):
+                args = command + (["--policy-dsl-root", str(self.runtime)] if runtime else [])
+                result = subprocess.run(args, text=True, capture_output=True, check=False)
+                report = json.loads(result.stdout)
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+                self.assertEqual(report["ok"], runtime)
+                if not runtime:
+                    self.assertIn("DOCS_DSL_RUNTIME", {f["code"] for f in report["findings"]})
 
     def test_legacy_v1_dsl_is_not_reinterpreted(self):
         with (self.root / self.fixture.name).open("a") as stream:

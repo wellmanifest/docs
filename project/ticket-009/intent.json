@@ -29,7 +29,7 @@
       "ui": {"impact": "none", "states": [], "evidence": []},
       "rollback": "Restore the preceding standard pin; preserve published document history."
     },
-    "runtimeDependencies": [{"name": "wellmanifest/policy-dsl", "reason": "Reuse canonical inert parser; digest-verified explicit checkout, never automatic download", "version": "7109aee92c2bb7ac2db8e3b0b4ddd7ded4750257"}],
+    "runtimeDependencies": ["wellmanifest/policy-dsl@7109aee92c2bb7ac2db8e3b0b4ddd7ded4750257"],
     "validation": [{"criterion": "AC-03", "commands": ["POLICY_DSL_ROOT=/path/to/pinned/policy-dsl python3 -m unittest discover -s docs/standard/tests", "./project/governance-check.sh --base origin/main"], "evidence": "project/ticket-009/README.md"}]
   }
 }
