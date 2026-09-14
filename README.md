@@ -46,8 +46,14 @@ czacie ani katalogu ticketu. Nie wolno publikować backupów i transkrypcji jako
 
 Publikacja pakietu i adopcja u konsumenta to osobne etapy. Samo scalenie
 tego standardu nie instaluje jego checkera w CI pozostałych repozytoriów.
-Profil v2 waliduje dokumenty i mapy odsyłaczy; nie interpretuje bloków DSL
-jako kontraktów FEATURE/BUGFIX ani jako dowodów wykonania testów.
+Profil v2 waliduje dokumenty i mapy odsyłaczy. Od 0.4 opcjonalny kontrakt
+FEATURE/BUGFIX używa przypiętego Policy DSL; nie jest dowodem wykonania testów.
+Zobacz [profil i przykład](docs/FEATURE/CHANGE_CONTRACTS.md).
+
+Dokument z blokiem `dsl` wymaga dodatkowo `--policy-dsl-root` wskazującego
+niezależnie przygotowany checkout z `docs/standard/policy-dsl.lock.json`.
+Nie kopiujemy parsera, nie pobieramy kodu automatycznie i nie przyjmujemy
+ścieżki runtime z dokumentu kandydata. Zwykłe v1/v2 nie wymagają runtime DSL.
 
 1. Wybierz pełny SHA opublikowanej wersji standardu i zweryfikuj jego pochodzenie przez używany proces adopcji. Standard nie nadaje sam sobie statusu opublikowanego.
 2. Utwórz `.governance/docs.json` w normalnym tickecie integracyjnym. Wstaw prawdziwy identyfikator repozytorium, pełną rewizję i SHA-256 dokładnych bajtów `docs/standard/policy.json`:
@@ -107,9 +113,14 @@ Adopcję floty zamyka się dopiero po dowodach z każdego objętego repozytorium
 ## Walidacja standardu
 
 ```bash
+POLICY_DSL_ROOT=/path/to/pinned/policy-dsl \
 python3 -m unittest discover -s docs/standard/tests -v
 ./project/governance-check.sh
 ```
+
+Bez `POLICY_DSL_ROOT` suite jawnie pomija testy integracji parsera. Nie jest
+to pełna walidacja kontraktów; przed publikacją wymagane jest wykonanie suite
+z przypiętym runtime i bez pominiętych testów integracyjnych.
 
 Polityka należy do tego pakietu. Checker jest testem zgodności, nie generatorem
 produktowym, kontrolerem publikacji ani źródłem uprawnień. Implementacje i

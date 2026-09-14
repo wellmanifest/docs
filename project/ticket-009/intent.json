@@ -1,0 +1,35 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-009",
+  "summary": "Pilot typed FEATURE and BUGFIX documentation contracts",
+  "workstream": "integration",
+  "classification": {
+    "kind": "FEATURE",
+    "priority": "P2",
+    "origin": "requested"
+  },
+  "allowedPaths": ["docs/standard/**", "docs/FEATURE/CHANGE_CONTRACTS.md", "docs/BUGFIX/DUPLICATE_DSL_CONTRACT.md", "docs/README.md", "README.md", "CHANGELOG.md", "VERSION", "project/ticket-009/**", "TODO.md", "project/TICKETS.md"],
+  "forbiddenPaths": ["project/ticket-*/user-*.md"],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "bfcb71ef19466e930218bb2a3bfdde758b2fd83d",
+    "targetBranch": "main",
+    "outcome": "Implement, validate and publish the optional FEATURE/BUGFIX Policy DSL profile through independent review",
+    "nonGoals": ["Consumer CI adoption", "Executing test references", "Authority evaluation", "New DSL grammar", "Runtime deployment"],
+    "complexity": "L", "estimatedMinutes": 90,
+    "budgets": {"maxImplementationFiles": 15, "maxAffectedComponents": 2, "maxPublicInterfaceChanges": 1, "maxRuntimeDependencies": 1},
+    "architecture": {
+      "status": "accepted", "decision": "Explicit immutable Policy DSL parser dependency and a bounded inert domain profile",
+      "components": [{"name": "standard", "paths": ["docs/standard/**"]}, {"name": "guidance", "paths": ["docs/FEATURE/**", "docs/BUGFIX/**", "docs/README.md", "README.md", "CHANGELOG.md", "VERSION"]}],
+      "responsibilityChanges": false, "interfaceChanges": ["Optional --policy-dsl-root for compact contracts"],
+      "dataChanges": ["Closed FEATURE/BUGFIX profile over Policy IR"],
+      "ui": {"impact": "none", "states": [], "evidence": []},
+      "rollback": "Restore the preceding standard pin; preserve published document history."
+    },
+    "runtimeDependencies": [{"name": "wellmanifest/policy-dsl", "reason": "Reuse canonical inert parser; digest-verified explicit checkout, never automatic download", "version": "7109aee92c2bb7ac2db8e3b0b4ddd7ded4750257"}],
+    "validation": [{"criterion": "AC-03", "commands": ["POLICY_DSL_ROOT=/path/to/pinned/policy-dsl python3 -m unittest discover -s docs/standard/tests", "./project/governance-check.sh --base origin/main"], "evidence": "project/ticket-009/README.md"}]
+  }
+}

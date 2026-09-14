@@ -1,5 +1,8 @@
 # Dokumentacja standardu
 
+- [Kontrakty FEATURE/BUGFIX](FEATURE/CHANGE_CONTRACTS.md) — kryteria i pliki testów w Policy DSL.
+- [Niejednoznaczne bloki DSL](BUGFIX/DUPLICATE_DSL_CONTRACT.md) — reprodukcja, zmiana zachowania i regresja.
+
 - [Dokument kompaktowy](standard/templates/COMPACT.md) — cztery sekcje do jednego tematu.
 - [Uzasadnienie i pomiar](ANALYSIS/COMPACT_DOCUMENTATION.md) — rozmiary przykładów, decyzje i granice migracji.
 

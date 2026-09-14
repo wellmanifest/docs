@@ -1,10 +1,69 @@
-# Standard informacji i planów refaktoryzacji — wellmanifest/docs 0.3.0
+# Standard informacji i planów refaktoryzacji — wellmanifest/docs 0.4.0
 
 Słowa MUSI, NIE WOLNO i POWINIEN określają odpowiednio wymaganie, zakaz i zalecenie. `policy.json` jest kanonicznym katalogiem ścieżek, metadanych i sekcji; ten dokument opisuje ich znaczenie. HOME standardu: wellmanifest; projekty Subactor ADOPT ten pakiet i pozostają właścicielami swojego kodu oraz informacji.
 
 Nowe krótkie dokumenty POWINNY używać profilu kompaktowego v2 (DOCS-009).
 Reguły metadanych, ścieżek i sekcji DOCS-002/004/005 opisują format v1;
 dla v2 zastępuje je DOCS-009. Zasady właściciela, dowodów i uprawnień są wspólne.
+
+## DOCS-010 — Opcjonalny kontrakt zmiany
+
+Profil `wellmanifest.docs/change/v1` reużywa gramatykę i zamknięty Policy IR
+`wellmanifest.policy/v1`. Nie tworzy nowego języka. W kompaktowym FEATURE
+lub BUGFIX można umieścić jeden pełny blok z etykietą dokładnie `dsl`.
+Każdy taki blok podlega walidacji; nieznanej składni NIE WOLNO ignorować.
+Ilustracje poza kontraktem oznaczać `text`. Zewnętrzne ogrodzenie kodu
+zachowuje zagnieżdżony przykład jako tekst. Dokumenty v1 nie są reinterpretowane.
+
+Kontrakt MUSI deklarować `DOCUMENT DOCS_FEATURE` albo `DOCS_BUGFIX`,
+`VERSION` równą wersji metadanych, `MODE STRICT` oraz
+`POLICY "wellmanifest.docs/change/v1"`. Obowiązkowe wiązania:
+
+- `SUBJECT = "..."`: dokładny identyfikator dokumentu.
+- `COMPATIBILITY = "..."`: wpływ na zgodność lub uzasadniony brak wpływu.
+- `INPUTS IN ["NAME", ...]`: 1–16 unikalnych nazw obserwacji UPPER_SNAKE_CASE.
+- W BUGFIX dodatkowo `REPRODUCTION`, `BEFORE` i `AFTER`: niepuste opisy.
+
+Innych wiązań, środowiska, sekretów, stanów, przejść i globalnych asercji
+NIE WOLNO dodawać. Teksty mają najwyżej 400 znaków. Kontrakt zawiera 1–12
+unikalnych `RULE AC-NN TYPE REQUIRED`, każda z warunkiem `WHEN`,
+co najmniej jedną `ASSERT` i odwołaniem `DO VALIDATE "tests/file.py"`.
+Każda asercja odwołuje się do zadeklarowanej obserwacji; same stałe nie
+stanowią kryterium. Dozwolone są wyrażenia skalarne i listy Policy IR,
+bez sekwencji i nierozwiązanych placeholderów. Nazwy obserwacji są jawne;
+checker nie pobiera ich wartości z procesu ani repozytorium.
+
+`DO VALIDATE` jest odwołaniem, nie poleceniem. Cel MUSI być śledzonym plikiem
+wewnątrz katalogu `tests` lub `test` w tym repozytorium, bez dowiązań,
+wyjścia poza root, fragmentów i selektorów typu `::test_name`. Inne dyrektywy,
+warunkowe dyrektywy, `FORBID` i `NEXT` nie należą do tego profilu.
+
+Blok ma limit 8 KiB; nadal obowiązują całkowite limity dokumentu v2.
+Checker potwierdza strukturę i referencje, NIE wyniki testów, prawdziwość
+obserwacji ani kompletność pokrycia. Nie ocenia asercji i niczego nie wykonuje.
+Ticket i `intent.json` pozostają źródłem zakresu realizacji; review, wykonanie
+i merge zachowują odrębne granice uprawnień.
+
+### Przypięcie i uruchomienie parsera
+
+Zaufany operator/CI dostarcza `--policy-dsl-root`, wskazujący checkout
+z rewizji zapisanej w `policy-dsl.lock.json`. Standard sprawdza SHA-256
+parsera, EBNF i schematu przed użyciem dokładnie zweryfikowanych bajtów
+parsera. Ścieżki z dowiązaniami i różniące się artefakty są odrzucane.
+Nie ma automatycznego pobierania, kopiowania parsera ani konfiguracji runtime
+w dokumencie kandydata. Zaufany pin całego pakietu docs obejmuje także lock;
+sam kandydat nie może go zastąpić.
+
+`DOCS_DSL_RUNTIME` oznacza brak lub niezgodność zależności;
+`DOCS_DSL_FENCE` niepoprawne ogrodzenie; `DOCS_DSL_SYNTAX` odmowę
+kanonicznego parsera; `DOCS_DSL_CONTRACT` odmowę profilu;
+`DOCS_DSL_TEST` błędny cel testu. Każdy błąd zatrzymuje kontrolę.
+Bez bloku DSL zależność nie jest potrzebna. Istniejące ilustracje `dsl`
+w v2 wymagają migracji do `text` albo prawidłowego kontraktu.
+
+Przykłady: [FEATURE](../FEATURE/CHANGE_CONTRACTS.md) oraz
+[BUGFIX](../BUGFIX/DUPLICATE_DSL_CONTRACT.md). Pełna adopcja w CI konsumenta
+wymaga osobnego przypięcia i dowodu, że brama odrzuca błędny kontrakt.
 
 ## DOCS-009 — Profil kompaktowy v2
 
