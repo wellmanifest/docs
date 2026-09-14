@@ -17,6 +17,7 @@ POLICY_SHA256 = hashlib.sha256(POLICY_BYTES).hexdigest()
 SHA = re.compile(r'^[0-9a-f]{40}$')
 REPO = re.compile(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
 MARKER = re.compile(r'<!-- docs:section ([a-z_]+) -->')
+PLACEHOLDER = re.compile(r'\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}')
 
 
 def origin(root):
@@ -238,7 +239,7 @@ def check(root, revision, deliverables=(), today=None, base=None):
         except (OSError, ValueError) as error:
             fail('DOCS_METADATA', name, type(error).__name__)
             continue
-        if '{{' in text or '}}' in text:
+        if PLACEHOLDER.search(text):
             fail('DOCS_PLACEHOLDER', name, 'Replace template placeholders with actual findings or a reasoned not-applicable statement')
         if base:
             old = subprocess.run(['git', 'show', base + ':' + name], cwd=root,

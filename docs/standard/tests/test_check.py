@@ -96,6 +96,27 @@ class Conformance(unittest.TestCase):
         self.write_doc()
         self.assertIn('DOCS_PLACEHOLDER', self.codes())
 
+    def test_nested_json_is_not_a_template_placeholder(self):
+        path = self.root / self.name
+        path.write_text(path.read_text() + '\n```json\n{"budget":{"deadline_ms":8000,"concurrency":3}}\n```\n')
+        self.assertTrue(self.check()['ok'], self.check()['findings'])
+
+    def test_code_braces_and_literal_single_delimiters_are_not_placeholders(self):
+        path = self.root / self.name
+        for example in ['if (ready) {{run();}}', 'nested JSON closes with }}', 'opening delimiters {{']:
+            with self.subTest(example=example):
+                self.write_doc()
+                path.write_text(path.read_text() + '\n```text\n' + example + '\n```\n')
+                self.assertNotIn('DOCS_PLACEHOLDER', self.codes())
+
+    def test_actual_placeholder_is_rejected_in_prose_and_code(self):
+        path = self.root / self.name
+        for example in ['Owner: {{OWNER}}', '```json\n{"owner":"{{OWNER}}"}\n```', '{{ OWNER_NAME }}', '{{title}}']:
+            with self.subTest(example=example):
+                self.write_doc()
+                path.write_text(path.read_text() + '\n' + example + '\n')
+                self.assertIn('DOCS_PLACEHOLDER', self.codes())
+
     def test_missing_adoption_fails(self):
         (self.root / '.governance/docs.json').unlink()
         self.assertIn('DOCS_ADOPTION', self.codes())
