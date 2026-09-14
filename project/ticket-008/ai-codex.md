@@ -1,5 +1,9 @@
 # Execution
 
+SESSION_EXECUTION_AUTHORIZATION (2026-09-14): user explicitly requested
+"kontynuuj, wypchnij, scal". This extends delivery to branch push, PR and
+the declared independent protected merge process, never self-approval.
+
 SESSION_EXECUTION_AUTHORIZATION: user requested research and implementation
 of compact uppercase documentation and changelog linking in wellmanifest/docs.
 Local implementation is authorized. Taskand and logs are read-only references.

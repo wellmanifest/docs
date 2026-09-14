@@ -44,6 +44,11 @@ czacie ani katalogu ticketu. Nie wolno publikować backupów i transkrypcji jako
 
 ## Adopcja w projekcie
 
+Publikacja pakietu i adopcja u konsumenta to osobne etapy. Samo scalenie
+tego standardu nie instaluje jego checkera w CI pozostałych repozytoriów.
+Profil v2 waliduje dokumenty i mapy odsyłaczy; nie interpretuje bloków DSL
+jako kontraktów FEATURE/BUGFIX ani jako dowodów wykonania testów.
+
 1. Wybierz pełny SHA opublikowanej wersji standardu i zweryfikuj jego pochodzenie przez używany proces adopcji. Standard nie nadaje sam sobie statusu opublikowanego.
 2. Utwórz `.governance/docs.json` w normalnym tickecie integracyjnym. Wstaw prawdziwy identyfikator repozytorium, pełną rewizję i SHA-256 dokładnych bajtów `docs/standard/policy.json`:
 

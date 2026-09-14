@@ -17,8 +17,8 @@
   "delivery": {
     "acceptedBaseSha": "4829a5dbeb418dc2606ffa0ce00796c20f44acf1",
     "targetBranch": "main",
-    "outcome": "Implement and validate compact documentation standard locally",
-    "nonGoals": ["Fleet migration", "Changes to Taskand or FixOS", "Protected publication"],
+    "outcome": "Publish compact documentation standard through independent protected review and merge",
+    "nonGoals": ["Fleet migration", "Changes to Taskand or FixOS", "Runtime deployment", "DSL extension"],
     "complexity": "L",
     "estimatedMinutes": 60,
     "budgets": {"maxImplementationFiles": 15, "maxAffectedComponents": 2, "maxPublicInterfaceChanges": 1, "maxRuntimeDependencies": 0},

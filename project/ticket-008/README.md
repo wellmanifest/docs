@@ -3,7 +3,7 @@
 - **ID**: ticket-008
 - **Owner**: codex
 - **Status**: IN_PROGRESS
-- **Workflow state**: VALIDATION
+- **Workflow state**: PUBLICATION
 - **Created**: 2026-09-14
 
 ## Goal and scope
@@ -32,8 +32,10 @@ metadata findings remain explicit, not waived as successful fleet adoption.
 Result: [policy](../../docs/standard/POLICY.md) and
 [analysis](../../docs/ANALYSIS/COMPACT_DOCUMENTATION.md).
 
-Local implementation only. No PR, release, protected merge or fleet adoption.
-Ticket stays IN_PROGRESS pending any separately requested publication.
+Publication authorized by the user on 2026-09-14: push this ticket branch,
+open its PR and invoke independent protected review and merge. No deployment,
+fleet adoption or unimplemented DSL extension is included. Keep IN_PROGRESS
+through exact-head review; only the protected controller proves integration.
 
 ## Tracking boundary
 
