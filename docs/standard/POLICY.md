@@ -100,6 +100,22 @@ Po zapisaniu i git add uruchomić checker z zaufanym `--base` i
 generatorów. Nowy pin i ustawienie v2 w generatorze wymagają adopcji konsumenta;
 wdrożenie źródła standardu nie oznacza wdrożenia na flocie.
 
+### Sprawdzalna mapa dawnej ścieżki
+
+Stary plik może stać się mapą `wellmanifest.docs/redirect/v1`. Nagłówek JSON
+ma dokładnie pola `schema`, `owner` (repozytorium), `version` (dodatnia
+liczba), `updated` (data) i `targets` (1–16 ścieżek od korzenia repo).
+Zachować dotychczasowe nagłówki, a pod nimi umieścić wyłącznie linki do
+zadeklarowanych plików. Bez kopii treści, łańcuchów przekierowań i URL sieciowych.
+Mapy nie zajmują identyfikatora dokumentu kanonicznego. Każdy cel musi być
+śledzonym dokumentem v1/v2 we właściwej lokalizacji, wpisanym do indeksu.
+Treść mapy ma najwyżej 120 linii i 12 KiB.
+
+Przy zaufanym `--base` checker potwierdza istnienie starej ścieżki oraz wzrost
+version względem poprzednich zarządzanych metadanych. Audyt bez bazy i preflight
+sprawdzają strukturę mapy, nie jej pochodzenie. Nowy plik z mapą nie może
+udawać historycznej ścieżki w bramie publikacji.
+
 ## DOCS-001 — Zakres
 
 Profil Subactor obowiązuje każde repozytorium `subactor/*`, obecne i przyszłe: usługi, biblioteki, CLI, agentów, standardy produktowe i repozytoria dokumentacji. Obejmuje nowe i zmieniane informacje trwałe, analizy, decyzje i plany refaktoryzacji. Istniejącej historii nie przepisuje się masowo; migracja dokumentu następuje przy jego następnej merytorycznej zmianie. Obowiązywanie wytycznej i potwierdzona adopcja w CI to dwa odrębne stany.

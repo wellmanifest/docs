@@ -3,13 +3,13 @@
   "schema": "wellmanifest.docs/document/v2",
   "id": "compact-documentation",
   "kind": "analysis",
-  "version": 1,
+  "version": 2,
   "title": "Krótkie dokumenty adresowane z changelogu",
   "status": "proposed",
   "owner": "wellmanifest/docs",
   "scope": "repository",
   "updated": "2026-09-14",
-  "source_revision": "4829a5dbeb418dc2606ffa0ce00796c20f44acf1",
+  "source_revision": "dde1ecfc8325cc2d891504a083925db628a96109",
   "priority": "P2",
   "evidence": [
     "github://wellmanifest/docs/commit/4829a5dbeb418dc2606ffa0ce00796c20f44acf1",
@@ -61,12 +61,20 @@ z metadanymi. To początkowe limity projektowe, nie wynik badania użyteczności
 Checker i testy sprawdzają nazwy, limity, indeks, metadane, wersje oraz
 istnienie śledzonych plików wskazanych lokalnymi linkami Markdown changelogu.
 
+Pilotaż lokalny 2026-09-14 w Taskand-glm53, Goal i Koru: 12 przewodników
+po 55–71 linii / 257–350 słów; pięć dawnych wejść zachowuje 67 nagłówków.
+Wybrany materiał: 6732 → 4214 słów, łącznie z metadanymi i mapami.
+Checker sprawdza teraz `redirect/v1`: istniejącą ścieżkę względem bazy,
+ograniczoną mapę linków i kanoniczne cele bez łańcuchów przekierowań.
+66 testów standardu przechodzi. Audyt zmienionych dokumentów nie ma błędów;
+pełna adopcja pozostaje niezaliczona (brak pinów i wcześniejsze metadane).
+
 <!-- docs:section risks -->
 ## Ograniczenia i migracja
 
-Nie wykonano audytu całej floty ani migracji Taskand. Rozdzielić przykładowo
-plan ewolucji na OFFLINE_UPDATE_ACTIVATION.md i FEDERATION_CATALOG_SYNC.md;
-oryginał zachować jako mapę odsyłaczy z dotychczasowymi kotwicami.
+Nie wykonano audytu całej floty ani chronionej publikacji pilota.
+Podział planu Taskand obejmuje m.in. OFFLINE_NODE_UPDATES.md i
+RUNTIME_PACKAGE_CONTRACT.md. Oryginał pozostaje mapą dawnych kotwic.
 Treści wymagające wspólnego kontekstu pozostają w legacy v1 do zaplanowania
 bezstratnego podziału. Właściciel pakietu weryfikuje pilota przed adopcją.
 Przypięcie poprzedniej opublikowanej rewizji stanowi rollback konsumenta.

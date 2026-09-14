@@ -27,8 +27,8 @@
       "decision": "Add compact document/v2 while retaining v1 compatibility",
       "components": [{"name": "documentation-standard", "paths": ["docs/**"]}, {"name": "package-guidance", "paths": ["README.md", "CHANGELOG.md", "VERSION"]}],
       "responsibilityChanges": false,
-      "interfaceChanges": ["Compact document/v2 and preparation format selection"],
-      "dataChanges": ["Compact metadata and size limits"],
+      "interfaceChanges": ["Compact document/v2, legacy redirect/v1 and preparation format selection"],
+      "dataChanges": ["Compact metadata, bounded legacy link maps and size limits"],
       "ui": {"impact": "none", "states": [], "evidence": []},
       "rollback": "Restore the previously published immutable standard pin."
     },

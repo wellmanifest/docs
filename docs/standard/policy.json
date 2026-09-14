@@ -34,6 +34,7 @@
     "changelog": "CHANGELOG.md"
   },
   "document_schema": "wellmanifest.docs/document/v1",
+  "redirect_schema": "wellmanifest.docs/redirect/v1",
   "adoption_schema": "wellmanifest.docs/adoption/v1",
   "profile": {
     "required_namespace": "subactor/",

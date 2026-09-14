@@ -13,3 +13,8 @@ v1 remains compatible; v2 requires explicit generator selection. Changelog
 checking verifies local Markdown file targets, not remote URLs or rendered
 heading fragments. The measured report is a local standard-design result,
 not a fleet migration claim.
+
+Continuation authorization: user requested refactoring several semcod repos.
+Pilot exposed that the documented legacy link-map migration had no checker
+representation. Implement redirect/v1 in the existing checker and tests before
+accepting the pilot maps; keep this inside the original migration scope.

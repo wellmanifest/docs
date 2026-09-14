@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from posixpath import relpath
 from urllib.parse import unquote, urlsplit
 
 PACK = Path(__file__).resolve().parent
@@ -166,7 +167,75 @@ def prepare_delivery(root, revision, kind, slug, scope, destination, compact=Fal
 
 
 def document_schemas():
-    return (POLICY['document_schema'], POLICY['compact']['document_schema'])
+    return (POLICY['document_schema'], POLICY['compact']['document_schema'], POLICY['redirect_schema'])
+
+
+def check_redirect(root, repository, name, meta, body, files, base, fail):
+    """A legacy path is a bounded link map, never a second canonical document."""
+    fields = {'schema', 'owner', 'version', 'updated', 'targets'}
+    if (set(meta) != fields or meta.get('owner') != repository
+            or not valid_value('positive_integer', meta.get('version'))
+            or not valid_value('date', meta.get('updated'))
+            or not isinstance(meta.get('targets'), list) or not meta['targets']
+            or len(meta['targets']) > 16
+            or any(not isinstance(t, str) for t in meta['targets'])
+            or len(set(meta['targets'])) != len(meta['targets'])):
+        fail('DOCS_REDIRECT', name, 'Expected owner, version, updated and unique target paths')
+        return
+    if base:
+        old = subprocess.run(['git', 'cat-file', '-e', base + ':' + name],
+                             cwd=root, capture_output=True, check=False)
+        if old.returncode:
+            fail('DOCS_REDIRECT_BASE', name, 'Only a path present in the trusted base may become a link map')
+    if len(body.splitlines()) > 120 or len(body.encode('utf-8')) > 12288:
+        fail('DOCS_SIZE', name, 'Legacy maps must stay below 120 body lines and 12 KiB')
+    targets = set()
+    for target in meta['targets']:
+        relative = safe_path(root, target)
+        if (relative is None or Path(target).is_absolute() or target not in files
+                or not (root / relative).is_file()):
+            fail('DOCS_REDIRECT_TARGET', name, 'Missing, untracked or unsafe target: ' + target)
+            continue
+        try:
+            target_meta, _ = metadata((root / relative).read_text())
+            compact = target_meta.get('schema') == POLICY['compact']['document_schema']
+            kinds = POLICY['compact']['directories'] if compact else POLICY['kinds']
+            if (target_meta.get('schema') not in document_schemas()[:2]
+                    or not valid_value('slug', target_meta.get('id'))
+                    or not isinstance(target_meta.get('kind'), str)
+                    or target_meta['kind'] not in kinds):
+                raise ValueError('not canonical')
+            expected, _ = layout(repository, target_meta['kind'], target_meta['id'], compact)
+            if expected != relative:
+                raise ValueError('wrong path')
+        except (OSError, ValueError):
+            fail('DOCS_REDIRECT_TARGET', name, 'Target must be canonical v1/v2, never another redirect: ' + target)
+            continue
+        targets.add(relative)
+    linked = set()
+    for line in body.splitlines():
+        if not line.strip() or re.fullmatch(r'#{1,6} .+', line):
+            continue
+        match = re.fullmatch(r'(?:- )?\[[^\]\n]+\]\(([^)]+)\)', line)
+        if not match:
+            fail('DOCS_REDIRECT_BODY', name, 'Only headings and whole-file links are allowed')
+            continue
+        try:
+            destination = urlsplit(match.group(1))
+        except ValueError:
+            fail('DOCS_REDIRECT_BODY', name, 'Malformed destination')
+            continue
+        if destination.scheme or destination.netloc or destination.query or destination.fragment:
+            fail('DOCS_REDIRECT_BODY', name, 'Link directly to a listed canonical file')
+            continue
+        links = {relpath(t.as_posix(), Path(name).parent.as_posix()): t for t in targets}
+        relative = links.get(unquote(destination.path))
+        if relative is None:
+            fail('DOCS_REDIRECT_BODY', name, 'Link is not a listed canonical target')
+        else:
+            linked.add(relative)
+    if linked != targets:
+        fail('DOCS_REDIRECT_BODY', name, 'Every target must be linked in the map')
 
 
 def check_changelog(root, files, fail):
@@ -302,6 +371,9 @@ def check(root, revision, deliverables=(), today=None, base=None):
                     pass
         compact = meta.get('schema') == POLICY['compact']['document_schema']
         fields = POLICY['compact']['metadata'] if compact else POLICY['metadata']
+        if meta.get('schema') == POLICY['redirect_schema']:
+            check_redirect(root, repository, name, meta, body, files, base, fail)
+            continue
         optional = {} if compact else POLICY.get('optional_metadata', {})
         if (not set(fields) <= set(meta) or not set(meta) <= set(fields) | set(optional)
                 or any(not valid_value(t, meta.get(k)) for k, t in fields.items())

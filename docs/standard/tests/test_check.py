@@ -393,6 +393,46 @@ class CompactConformance(unittest.TestCase):
     def test_compact_and_legacy_coexist(self):
         self.assertEqual(self.codes(), set())
 
+    def redirect(self, target=None, body=None):
+        meta = {'schema': checker.POLICY['redirect_schema'], 'owner': 'subactor/example',
+                'version': 2, 'updated': '2026-09-14', 'targets': [target or self.name]}
+        path = self.root / 'docs/old-guide.md'
+        path.write_text('---\n' + json.dumps(meta) + '\n---\n'
+                        + (body or '# Old guide\n[Current guide](FEATURE/PROVIDER_DNS_CHANGE_DETECTION.md)\n'))
+        self.git('add', '.')
+        return path
+
+    def test_legacy_map_preserves_entry_and_is_discovered(self):
+        (self.root / 'docs/old-guide.md').write_text('# Old guide\nHistorical prose.')
+        self.git('add', '.')
+        base = self.base()
+        self.redirect()
+        self.assertEqual(self.codes(base=base), set())
+        self.assertEqual(self.codes(), set())  # Structural audit without provenance.
+
+    def test_new_map_cannot_invent_legacy_path(self):
+        base = self.base()
+        self.redirect()
+        self.assertIn('DOCS_REDIRECT_BASE', self.codes(base=base))
+
+    def test_map_cannot_hide_prose_or_external_destination(self):
+        for body in ['New hidden report', '[External](https://example.org/guide.md)',
+                     '[Alias](alias.md)', '[Broken](http://[bad)']:
+            self.redirect(body=body)
+            self.assertIn('DOCS_REDIRECT_BODY', self.codes())
+
+    def test_map_targets_are_canonical_and_tracked(self):
+        for target in ['docs/missing.md', 'docs/old-guide.md', '../outside.md']:
+            self.redirect(target=target)
+            self.assertIn('DOCS_REDIRECT_TARGET', self.codes())
+
+    def test_map_requires_version_increment(self):
+        self.redirect()
+        base = self.base()
+        path = self.redirect()
+        path.write_text(path.read_text().replace('# Old guide', '# Renamed heading'))
+        self.assertIn('DOCS_VERSION', self.codes(base=base))
+
     def test_non_string_schema_is_a_finding_not_a_crash(self):
         self.meta['schema'] = [checker.POLICY['compact']['document_schema']]
         self.write()

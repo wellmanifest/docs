@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Sprawdzalne mapy dawnych ścieżek przy podziale dokumentów — [reguły migracji](docs/standard/POLICY.md).
 - Krótkie dokumenty z nazwami UPPER_SNAKE_CASE, kategoriami i trwałymi linkami — [opis](docs/ANALYSIS/COMPACT_DOCUMENTATION.md).
 
 ## 0.1.0

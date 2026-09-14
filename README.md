@@ -15,6 +15,11 @@ Changelog zawiera krótki skutek i link. Zobacz
 Poniższe wcześniejsze przykłady v1 pozostają interfejsem kompatybilności;
 nowy generator wybiera jawnie `--format v2`.
 
+Przy podziale istniejącego pliku zostaw `wellmanifest.docs/redirect/v1`:
+wyłącznie dotychczasowe nagłówki i linki do kanonicznych dokumentów.
+Checker weryfikuje cele i pochodzenie dawnej ścieżki przy podanym `--base`.
+Szczegóły migracji opisuje [polityka](docs/standard/POLICY.md).
+
 - [Wytyczne normatywne DOCS-001–008](docs/standard/POLICY.md)
 - [Maszynowy katalog kontraktu](docs/standard/policy.json)
 - [Szablon informacji](docs/standard/templates/information.md)
