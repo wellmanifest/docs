@@ -9,6 +9,8 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from posixpath import relpath
+from urllib.parse import unquote, urlsplit
 
 PACK = Path(__file__).resolve().parent
 POLICY_BYTES = (PACK / 'policy.json').read_bytes()
@@ -38,11 +40,14 @@ def tracked(root):
     return set(result.stdout.decode().split('\0')) - {''}
 
 
-def layout(repository, kind, slug):
+def layout(repository, kind, slug, compact=False):
     profile = POLICY['profile']
     override = profile['repository_overrides'].get(repository, {})
     root = override.get('docs_root', profile['docs_root'])
-    directory = POLICY['kinds'][kind]['directory']
+    directory = (POLICY['compact']['directories'][kind] if compact
+                 else POLICY['kinds'][kind]['directory'])
+    if compact:
+        slug = slug.replace('-', '_').upper()
     return Path(root) / override.get('prefix', '') / directory / (slug + '.md'), override.get('index', profile['index'])
 
 
@@ -78,6 +83,10 @@ def valid_value(kind, value):
         return bool(SHA.fullmatch(value))
     if kind == 'kind':
         return value in POLICY['kinds']
+    if kind == 'compact_kind':
+        return value in POLICY['compact']['directories']
+    if kind == 'priority':
+        return value in POLICY['compact']['priorities']
     if kind == 'scope':
         return value in POLICY['delivery_scopes']
     if kind == 'status':
@@ -119,7 +128,7 @@ def report_home(repository, scope):
     return repository
 
 
-def prepare_delivery(root, revision, kind, slug, scope, destination):
+def prepare_delivery(root, revision, kind, slug, scope, destination, compact=False):
     """Fail closed before generation; consumers must require ok before writing."""
     root = Path(root).resolve()
     repository = origin(root)
@@ -134,10 +143,11 @@ def prepare_delivery(root, revision, kind, slug, scope, destination):
         return {'ok': False, 'findings': [{'code': str(error)}]}
     if repository != owner:
         fail('DOCS_OWNER', 'Open the owning repository first: ' + owner)
-    if kind not in POLICY['kinds'] or not valid_value('slug', slug):
+    kinds = POLICY['compact']['directories'] if compact else POLICY['kinds']
+    if kind not in kinds or not valid_value('slug', slug) or (compact and not slug[0].isalpha()):
         fail('DOCS_METADATA', 'A known kind and stable slug are required')
         return {'ok': False, 'repository': repository, 'owner': owner, 'findings': findings}
-    expected_path, index = layout(owner, kind, slug)
+    expected_path, index = layout(owner, kind, slug, compact)
     relative = safe_path(root, destination)
     if relative != expected_path or safe_path(root, expected_path) is None:
         fail('DOCS_LOCATION', 'Expected repository-relative destination: ' + expected_path.as_posix())
@@ -150,8 +160,115 @@ def prepare_delivery(root, revision, kind, slug, scope, destination):
             'path': expected_path.as_posix(), 'index': index,
             'standard_revision': revision, 'policy_sha256': POLICY_SHA256,
             'authority': 'read-only-placement-evidence'}
+    if compact:
+        plan['document_schema'] = POLICY['compact']['document_schema']
     return {'ok': not findings, 'plan': plan, 'findings': findings,
             'plan_sha256': hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()}
+
+
+def document_schemas():
+    return (POLICY['document_schema'], POLICY['compact']['document_schema'], POLICY['redirect_schema'])
+
+
+def check_redirect(root, repository, name, meta, body, files, base, fail):
+    """A legacy path is a bounded link map, never a second canonical document."""
+    fields = {'schema', 'owner', 'version', 'updated', 'targets'}
+    if (set(meta) != fields or meta.get('owner') != repository
+            or not valid_value('positive_integer', meta.get('version'))
+            or not valid_value('date', meta.get('updated'))
+            or not isinstance(meta.get('targets'), list) or not meta['targets']
+            or len(meta['targets']) > 16
+            or any(not isinstance(t, str) for t in meta['targets'])
+            or len(set(meta['targets'])) != len(meta['targets'])):
+        fail('DOCS_REDIRECT', name, 'Expected owner, version, updated and unique target paths')
+        return
+    if base:
+        old = subprocess.run(['git', 'cat-file', '-e', base + ':' + name],
+                             cwd=root, capture_output=True, check=False)
+        if old.returncode:
+            fail('DOCS_REDIRECT_BASE', name, 'Only a path present in the trusted base may become a link map')
+    if len(body.splitlines()) > 120 or len(body.encode('utf-8')) > 12288:
+        fail('DOCS_SIZE', name, 'Legacy maps must stay below 120 body lines and 12 KiB')
+    targets = set()
+    for target in meta['targets']:
+        relative = safe_path(root, target)
+        if (relative is None or Path(target).is_absolute() or target not in files
+                or not (root / relative).is_file()):
+            fail('DOCS_REDIRECT_TARGET', name, 'Missing, untracked or unsafe target: ' + target)
+            continue
+        try:
+            target_meta, _ = metadata((root / relative).read_text())
+            compact = target_meta.get('schema') == POLICY['compact']['document_schema']
+            kinds = POLICY['compact']['directories'] if compact else POLICY['kinds']
+            if (target_meta.get('schema') not in document_schemas()[:2]
+                    or not valid_value('slug', target_meta.get('id'))
+                    or not isinstance(target_meta.get('kind'), str)
+                    or target_meta['kind'] not in kinds):
+                raise ValueError('not canonical')
+            expected, _ = layout(repository, target_meta['kind'], target_meta['id'], compact)
+            if expected != relative:
+                raise ValueError('wrong path')
+        except (OSError, ValueError):
+            fail('DOCS_REDIRECT_TARGET', name, 'Target must be canonical v1/v2, never another redirect: ' + target)
+            continue
+        targets.add(relative)
+    linked = set()
+    for line in body.splitlines():
+        if not line.strip() or re.fullmatch(r'#{1,6} .+', line):
+            continue
+        match = re.fullmatch(r'(?:- )?\[[^\]\n]+\]\(([^)]+)\)', line)
+        if not match:
+            fail('DOCS_REDIRECT_BODY', name, 'Only headings and whole-file links are allowed')
+            continue
+        try:
+            destination = urlsplit(match.group(1))
+        except ValueError:
+            fail('DOCS_REDIRECT_BODY', name, 'Malformed destination')
+            continue
+        if destination.scheme or destination.netloc or destination.query or destination.fragment:
+            fail('DOCS_REDIRECT_BODY', name, 'Link directly to a listed canonical file')
+            continue
+        links = {relpath(t.as_posix(), Path(name).parent.as_posix()): t for t in targets}
+        relative = links.get(unquote(destination.path))
+        if relative is None:
+            fail('DOCS_REDIRECT_BODY', name, 'Link is not a listed canonical target')
+        else:
+            linked.add(relative)
+    if linked != targets:
+        fail('DOCS_REDIRECT_BODY', name, 'Every target must be linked in the map')
+
+
+def check_changelog(root, files, fail):
+    """Check local Markdown destinations; never fetch external links."""
+    name = POLICY['compact']['changelog']
+    if name not in files:
+        return
+    if safe_path(root, name) is None or not (root / name).is_file():
+        fail('DOCS_CHANGELOG_LINK', name, 'Changelog must be a regular tracked file')
+        return
+    text = (root / name).read_text()
+    # Ignore fenced examples; support inline links and reference definitions.
+    text = re.sub(r'(?ms)^ *(`{3,}|~{3,})[^\n]*\n.*?^ *\1 *$', '', text)
+    destinations = re.findall(r'\]\(<?([^\s)>]+)>?(?:\s+"[^"]*")?\)', text)
+    destinations += re.findall(r'^\s*\[[^]]+\]:\s*<?([^\s>]+)>?', text, re.M)
+    for destination in destinations:
+        try:
+            link = urlsplit(destination)
+        except ValueError:
+            fail('DOCS_CHANGELOG_LINK', name, 'Malformed destination: ' + destination)
+            continue
+        if link.scheme or link.netloc or not link.path:
+            continue
+        path = unquote(link.path)
+        if not path.lower().endswith('.md'):
+            continue
+        relative = safe_path(root, path)
+        if (relative is None or relative.as_posix() not in files
+                or not (root / relative).is_file()):
+            fail('DOCS_CHANGELOG_LINK', name, 'Missing, untracked or unsafe target: ' + destination)
+            continue
+        # Heading rendering is host-specific. Verify the file only; authors
+        # should link whole documents to avoid fragile heading fragments.
 
 
 def check(root, revision, deliverables=(), today=None, base=None):
@@ -210,7 +327,7 @@ def check(root, revision, deliverables=(), today=None, base=None):
                                      capture_output=True, text=True, check=False)
                 try:
                     previous, _ = metadata(old.stdout)
-                    was_managed = previous.get('schema') == POLICY['document_schema']
+                    was_managed = previous.get('schema') in document_schemas()
                 except ValueError:
                     was_managed = False
                 organizational = (
@@ -221,10 +338,11 @@ def check(root, revision, deliverables=(), today=None, base=None):
                 if was_managed or not organizational:
                     selected.add(name)
     for name in files:
-        if not name.endswith('.md') or safe_path(root, name) is None:
+        if not name.lower().endswith('.md') or safe_path(root, name) is None:
             continue
         path = root / name
-        if path.is_file() and path.read_text(errors='replace').startswith('---') and POLICY['document_schema'] in path.read_text(errors='replace')[:8192]:
+        if path.is_file() and path.read_text(errors='replace').startswith('---') and any(
+                schema in path.read_text(errors='replace')[:8192] for schema in document_schemas()):
             selected.add(name)
     ids = set()
     for name in sorted(selected):
@@ -247,22 +365,34 @@ def check(root, revision, deliverables=(), today=None, base=None):
             if old.returncode == 0 and old.stdout != text:
                 try:
                     previous, _ = metadata(old.stdout)
-                    if previous.get('schema') == POLICY['document_schema'] and type(meta.get('version')) is int and type(previous.get('version')) is int and meta['version'] <= previous['version']:
+                    if previous.get('schema') in document_schemas() and type(meta.get('version')) is int and type(previous.get('version')) is int and meta['version'] <= previous['version']:
                         fail('DOCS_VERSION', name, 'Changed document must increase its declared version')
                 except ValueError:
                     pass
-        fields = POLICY['metadata']
-        optional = POLICY.get('optional_metadata', {})
+        compact = meta.get('schema') == POLICY['compact']['document_schema']
+        fields = POLICY['compact']['metadata'] if compact else POLICY['metadata']
+        if meta.get('schema') == POLICY['redirect_schema']:
+            check_redirect(root, repository, name, meta, body, files, base, fail)
+            continue
+        optional = {} if compact else POLICY.get('optional_metadata', {})
         if (not set(fields) <= set(meta) or not set(meta) <= set(fields) | set(optional)
                 or any(not valid_value(t, meta.get(k)) for k, t in fields.items())
                 or any(not valid_value(optional[k], meta[k]) for k in set(meta) & set(optional))
-                or meta.get('schema') != POLICY['document_schema']):
-            fail('DOCS_METADATA', name, 'Metadata fields, types or values violate document/v1')
+                or meta.get('schema') not in document_schemas()):
+            fail('DOCS_METADATA', name, 'Metadata fields, types or values violate the declared document schema')
             continue
         if meta['id'] in ids:
             fail('DOCS_DUPLICATE_ID', name, 'One canonical owner and one document for this id')
         ids.add(meta['id'])
-        expected_path, index = layout(repository, meta['kind'], meta['id'])
+        expected_path, index = layout(repository, meta['kind'], meta['id'], compact)
+        if compact:
+            limits = POLICY['compact']['limits']
+            if not re.fullmatch(POLICY['compact']['filename_pattern'], Path(name).stem):
+                fail('DOCS_FILENAME', name, 'Use UPPER_SNAKE_CASE.md with a descriptive stable name')
+            if (len(text.splitlines()) > limits['max_lines']
+                    or len(text.split()) > limits['max_words']
+                    or len(text.encode('utf-8')) > limits['max_bytes']):
+                fail('DOCS_SIZE', name, 'Split by topic; limits include metadata, code and tables: ' + str(limits))
         if Path(name) != expected_path:
             fail('DOCS_LOCATION', name, 'Expected ' + expected_path.as_posix())
         scope = meta.get('scope')
@@ -278,14 +408,15 @@ def check(root, revision, deliverables=(), today=None, base=None):
                                            capture_output=True, text=True, check=False)
             if previous_text.returncode or previous_text.stdout != text:
                 fail('DOCS_SCOPE', name, 'New or changed deliverables require explicit repository or organization scope')
-        if not meta['created'] <= meta['updated'] <= meta['review_after']:
+        if not compact and not meta['created'] <= meta['updated'] <= meta['review_after']:
             fail('DOCS_DATES', name, 'Expected created <= updated <= review_after')
-        if dt.date.fromisoformat(meta['review_after']) < (today or dt.date.today()):
+        if not compact and dt.date.fromisoformat(meta['review_after']) < (today or dt.date.today()):
             warnings.append({'code': 'DOCS_REVIEW_DUE', 'path': name})
         matches = list(MARKER.finditer(body))
         sections = [m.group(1) for m in matches]
-        required = POLICY['kinds'][meta['kind']]['sections']
-        if len(sections) != len(set(sections)) or any(s not in sections for s in required):
+        required = POLICY['compact']['sections'] if compact else POLICY['kinds'][meta['kind']]['sections']
+        if (len(sections) != len(set(sections)) or any(s not in sections for s in required)
+                or (compact and set(sections) != set(required))):
             fail('DOCS_SECTIONS', name, 'Required section markers must each occur once')
         for i, match in enumerate(matches):
             content = body[match.end():matches[i+1].start() if i+1 < len(matches) else len(body)]
@@ -299,6 +430,7 @@ def check(root, revision, deliverables=(), today=None, base=None):
             relative_link = expected_path.relative_to(Path(index).parent).as_posix()
             if not re.search(r'\]\(' + re.escape(relative_link) + r'(?:#[^)]*)?\)', index_text):
                 fail('DOCS_INDEX', name, 'Link the canonical document from ' + index)
+    check_changelog(root, files, fail)
     return {'ok': not findings, 'repository': repository, 'documents_checked': len(selected),
             'scope': POLICY['adoption_scope'], 'findings': findings, 'warnings': warnings}
 
@@ -312,15 +444,16 @@ def main():
     p.add_argument('--base', help='Trusted base SHA for version-increment checks')
     p.add_argument('--deliverable', action='append', default=[])
     p.add_argument('--prepare', action='store_true', help='Read-only mandatory pre-generation placement check')
-    p.add_argument('--kind', choices=list(POLICY['kinds']))
+    p.add_argument('--kind', choices=sorted(set(POLICY['kinds']) | set(POLICY['compact']['directories'])))
+    p.add_argument('--format', choices=['v1', 'v2'], default=None, help='Preparation format; v1 compatibility or compact v2')
     p.add_argument('--id', dest='slug')
     p.add_argument('--scope', choices=POLICY['delivery_scopes'])
     args = p.parse_args()
     if args.prepare:
         if args.fleet or args.base or len(args.deliverable) != 1 or not all([args.kind, args.slug, args.scope]):
             p.error('--prepare requires --root, --kind, --id, --scope and exactly one --deliverable, without --base')
-        result = prepare_delivery(args.root, args.standard_revision, args.kind, args.slug, args.scope, args.deliverable[0])
-    elif args.kind or args.slug or args.scope:
+        result = prepare_delivery(args.root, args.standard_revision, args.kind, args.slug, args.scope, args.deliverable[0], args.format == 'v2')
+    elif args.kind or args.slug or args.scope or args.format:
         p.error('--kind, --id and --scope require --prepare')
     elif args.fleet:
         if args.deliverable or args.base:

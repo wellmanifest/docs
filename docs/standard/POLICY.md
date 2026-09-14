@@ -1,6 +1,120 @@
-# Standard informacji i planów refaktoryzacji — wellmanifest/docs 0.2.0
+# Standard informacji i planów refaktoryzacji — wellmanifest/docs 0.3.0
 
 Słowa MUSI, NIE WOLNO i POWINIEN określają odpowiednio wymaganie, zakaz i zalecenie. `policy.json` jest kanonicznym katalogiem ścieżek, metadanych i sekcji; ten dokument opisuje ich znaczenie. HOME standardu: wellmanifest; projekty Subactor ADOPT ten pakiet i pozostają właścicielami swojego kodu oraz informacji.
+
+Nowe krótkie dokumenty POWINNY używać profilu kompaktowego v2 (DOCS-009).
+Reguły metadanych, ścieżek i sekcji DOCS-002/004/005 opisują format v1;
+dla v2 zastępuje je DOCS-009. Zasady właściciela, dowodów i uprawnień są wspólne.
+
+## DOCS-009 — Profil kompaktowy v2
+
+Jeden plik opisuje jeden problem, zmianę, decyzję albo procedurę. Nazwa MUSI
+określać temat i rezultat: `PROVIDER_DNS_CHANGE_DETECTION.md`, a nie
+`REPORT.md`, `SUMMARY_FINAL_V2.md` czy `URGENT_FIX.md`. Używamy ASCII
+`UPPER_SNAKE_CASE.md`: wielkie litery w nazwie, podkreślniki, rozszerzenie
+małe `.md`. Stabilne `id: provider-dns-change-detection` daje tę samą nazwę
+przez zamianę myślników na podkreślniki i wielkie litery; id zaczyna się literą.
+Wersja, data i priorytet nie należą do nazwy.
+
+| kind | Katalog | Zawartość |
+| --- | --- | --- |
+| bugfix | docs/BUGFIX/ | Objaw, przyczyna, poprawka, dowód regresji |
+| feature | docs/FEATURE/ | Nowe zachowanie, zakres, użycie i odbiór |
+| service | docs/SERVICE/ | Utrzymanie, obsługa lub procedura operacyjna |
+| information | docs/INFORMATION/ | Trwała instrukcja lub opis kontraktu |
+| analysis | docs/ANALYSIS/ | Pytanie, metoda, ustalenia i ograniczenia |
+| refactoring-plan | docs/REFACTORING/ | Mała zmiana struktury, zgodność i migracja |
+| decision | docs/DECISION/ | Wybór, alternatywy i konsekwencje |
+
+Obowiązuje istniejący wyjątek układu `subactor/docs` z prefiksem
+`architecture/` i indeksem `README.md`. Raport organizacyjny nadal należy do
+`org/report`. Profil można adoptować w dowolnym repo; `--fleet` nadal
+obejmuje wyłącznie lokalne checkouty Subactor.
+
+Nie tworzymy katalogu URGENT. Pilność to `priority: P0|P1|P2|P3`;
+P0/P1 oznaczają pilne prace zgodnie z klasyfikacją projektu. Poprawka pozostaje
+w BUGFIX po obniżeniu priorytetu. Rodzaj opisuje dokument, nie nadaje uprawnień
+i nie zastępuje klasyfikacji ticketu. Nie tworzymy pustych katalogów na zapas.
+
+[Szablon COMPACT.md](templates/COMPACT.md) ma 12 wymaganych pól JSON
+i cztery sekcje: `summary`, `details`, `validation`, `risks`.
+Tytuł nazywa rezultat; summary w 1–3 zdaniach podaje cel i stan.
+Details mieści zakres, przyczynę lub decyzję; analysis odróżnia fakty od hipotez.
+Validation podaje kryterium, metodę i wynik lub jawną lukę.
+Risks podaje zgodność, rollback, odpowiedzialnego i następny krok, o ile dotyczą.
+Refaktoryzacja zachowuje zależności etapów i warunek zatrzymania; bugfix
+wskazuje odtwarzalny objaw i test regresji. Sekcje nie mogą być puste.
+
+Limity MUSZĄ być spełnione jednocześnie: **120 linii, 600 słów, 12288 bajtów
+UTF-8** całego pliku, również JSON, tabel i kodu. Słowo to token oddzielony
+białymi znakami. Docelowo 40–80 linii i 150–400 słów. Limity są początkowym
+budżetem redakcyjnym; nie gwarantują jakości. Nie wolno usuwać istotnych
+ograniczeń ani dowodów, by zmieścić tekst. Podzielić go na samodzielne tematy,
+połączyć linkami i dodać krótkie opisy do indeksu. Logi i pełne wyniki testów
+pozostają artefaktami; procedury błędów należą do runbooków `errors/{CODE}.md`
+standardu logs i są linkowane.
+
+V2 usuwa duplikowane created/review_after/affected_repositories; historię dat
+zapewnia Git, datę obserwacji updated, właściciela owner i zakres scope.
+source_revision nadal wiąże pełny SHA badanego źródła, evidence podaje konkretne
+referencje. Zmiana ustaleń zwiększa version; updated musi opisywać rzeczywisty
+przegląd. Wymóg aktualności pozostaje merytoryczny: v2 nie emituje automatycznego
+ostrzeżenia review_after. Status dokumentu nie jest statusem wdrożenia.
+
+### Changelog i migracja
+
+Changelog POWINIEN zawierać jedno zdanie o skutku dla użytkownika i względny
+link do dokumentu, np.:
+
+```markdown
+- Wykrywanie zmiany adresu providera — [opis](docs/FEATURE/PROVIDER_DNS_CHANGE_DETECTION.md).
+```
+
+Szczegóły, polecenia i dowody należą do dokumentu. Nie tworzymy dokumentu dla
+każdej literówki; samodzielny opis ma być użyteczny poza historią commitu.
+Indeks `docs/README.md` zawiera temat i krótkie objaśnienie, bez kopii treści.
+Preferowane są linki do całych plików. Checker weryfikuje lokalne cele Markdown
+w śledzonym CHANGELOG.md (inline i definicje referencyjne), również usunięte
+lub nieśledzone pliki i dowiązania. Nie sprawdza sieci ani kotwic renderera;
+nie ocenia długości zdań i trafności opisu. Przykłady w fenced code są pomijane.
+
+Format v1 i jego dotychczasowe ścieżki pozostają obsługiwane. Brama nie wymusza
+masowej konwersji ani nie uznaje v1 za dowód adopcji v2. Migrację planujemy przy
+merytorycznej zmianie: spis linków, podział tematów, aktualizacja indeksu
+i changelogu w jednym diffie, kontrola odnośników. Zachować dawny plik jako
+mapę do nowych tematów i dotychczasowe kotwice dla starszych linków; nie
+przepisywać opublikowanej historii wydań. W razie zmiany rodzaju utrzymać
+stare wejście na czas migracji. Nie kopiować pełnej treści do dwóch katalogów.
+
+Preflight dla v2 jawnie wybiera format:
+
+```bash
+python3 "$DOCS_STANDARD_ROOT/docs/standard/check.py" \
+  --root . --standard-revision "$DOCS_STANDARD_REVISION" --prepare --format v2 \
+  --scope repository --kind feature --id provider-dns-change-detection \
+  --deliverable docs/FEATURE/PROVIDER_DNS_CHANGE_DETECTION.md
+```
+
+Po zapisaniu i git add uruchomić checker z zaufanym `--base` i
+`--deliverable`. Przygotowanie bez `--format` zachowuje v1 dla dotychczasowych
+generatorów. Nowy pin i ustawienie v2 w generatorze wymagają adopcji konsumenta;
+wdrożenie źródła standardu nie oznacza wdrożenia na flocie.
+
+### Sprawdzalna mapa dawnej ścieżki
+
+Stary plik może stać się mapą `wellmanifest.docs/redirect/v1`. Nagłówek JSON
+ma dokładnie pola `schema`, `owner` (repozytorium), `version` (dodatnia
+liczba), `updated` (data) i `targets` (1–16 ścieżek od korzenia repo).
+Zachować dotychczasowe nagłówki, a pod nimi umieścić wyłącznie linki do
+zadeklarowanych plików. Bez kopii treści, łańcuchów przekierowań i URL sieciowych.
+Mapy nie zajmują identyfikatora dokumentu kanonicznego. Każdy cel musi być
+śledzonym dokumentem v1/v2 we właściwej lokalizacji, wpisanym do indeksu.
+Treść mapy ma najwyżej 120 linii i 12 KiB.
+
+Przy zaufanym `--base` checker potwierdza istnienie starej ścieżki oraz wzrost
+version względem poprzednich zarządzanych metadanych. Audyt bez bazy i preflight
+sprawdzają strukturę mapy, nie jej pochodzenie. Nowy plik z mapą nie może
+udawać historycznej ścieżki w bramie publikacji.
 
 ## DOCS-001 — Zakres
 

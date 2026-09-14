@@ -1,0 +1,38 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-008",
+  "summary": "Compact categorized documentation and changelog links",
+  "workstream": "integration",
+  "classification": {
+    "kind": "FEATURE",
+    "priority": "P2",
+    "origin": "requested"
+  },
+  "allowedPaths": ["docs/standard/**", "docs/README.md", "docs/ANALYSIS/COMPACT_DOCUMENTATION.md", "README.md", "CHANGELOG.md", "VERSION", "project/ticket-008/**", "TODO.md", "project/TICKETS.md"],
+  "forbiddenPaths": ["project/ticket-*/user-*.md"],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "4829a5dbeb418dc2606ffa0ce00796c20f44acf1",
+    "targetBranch": "main",
+    "outcome": "Publish compact documentation standard through independent protected review and merge",
+    "nonGoals": ["Fleet migration", "Changes to Taskand or FixOS", "Runtime deployment", "DSL extension"],
+    "complexity": "L",
+    "estimatedMinutes": 60,
+    "budgets": {"maxImplementationFiles": 15, "maxAffectedComponents": 2, "maxPublicInterfaceChanges": 1, "maxRuntimeDependencies": 0},
+    "architecture": {
+      "status": "accepted",
+      "decision": "Add compact document/v2 while retaining v1 compatibility",
+      "components": [{"name": "documentation-standard", "paths": ["docs/**"]}, {"name": "package-guidance", "paths": ["README.md", "CHANGELOG.md", "VERSION"]}],
+      "responsibilityChanges": false,
+      "interfaceChanges": ["Compact document/v2, legacy redirect/v1 and preparation format selection"],
+      "dataChanges": ["Compact metadata, bounded legacy link maps and size limits"],
+      "ui": {"impact": "none", "states": [], "evidence": []},
+      "rollback": "Restore the previously published immutable standard pin."
+    },
+    "runtimeDependencies": [],
+    "validation": [{"criterion": "AC-02", "commands": ["python3 -m unittest discover -s docs/standard/tests", "./project/governance-check.sh"], "evidence": "project/ticket-008/README.md"}]
+  }
+}

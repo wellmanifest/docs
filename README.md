@@ -4,6 +4,22 @@ Standard tworzenia i przechowywania informacji, analiz, decyzji i planów refakt
 
 HOME: `wellmanifest` · SHAPE: `domain_pack` · ADOPT przez konsumentów: `wellmanifest/docs`.
 
+Profil kompaktowy v2: `docs/FEATURE/PROVIDER_DNS_CHANGE_DETECTION.md`,
+`docs/BUGFIX/CONFIG_RELOAD_TIMEOUT.md` lub `docs/SERVICE/CACHE_CLEANUP.md`.
+Jeden temat, cztery sekcje, najwyżej 120 linii / 600 słów / 12 KiB.
+URGENT to priorytet P0/P1 w metadanych; nazwa i link pozostają stabilne.
+Changelog zawiera krótki skutek i link. Zobacz
+[reguły v2](docs/standard/POLICY.md#docs-009--profil-kompaktowy-v2),
+[szablon](docs/standard/templates/COMPACT.md) i
+[pomiar przykładów](docs/ANALYSIS/COMPACT_DOCUMENTATION.md).
+Poniższe wcześniejsze przykłady v1 pozostają interfejsem kompatybilności;
+nowy generator wybiera jawnie `--format v2`.
+
+Przy podziale istniejącego pliku zostaw `wellmanifest.docs/redirect/v1`:
+wyłącznie dotychczasowe nagłówki i linki do kanonicznych dokumentów.
+Checker weryfikuje cele i pochodzenie dawnej ścieżki przy podanym `--base`.
+Szczegóły migracji opisuje [polityka](docs/standard/POLICY.md).
+
 - [Wytyczne normatywne DOCS-001–008](docs/standard/POLICY.md)
 - [Maszynowy katalog kontraktu](docs/standard/policy.json)
 - [Szablon informacji](docs/standard/templates/information.md)
@@ -27,6 +43,11 @@ Końcowego wyniku nie wolno pozostawić wyłącznie w `/tmp`, `$HOME/.local/stat
 czacie ani katalogu ticketu. Nie wolno publikować backupów i transkrypcji jako dokumentacji.
 
 ## Adopcja w projekcie
+
+Publikacja pakietu i adopcja u konsumenta to osobne etapy. Samo scalenie
+tego standardu nie instaluje jego checkera w CI pozostałych repozytoriów.
+Profil v2 waliduje dokumenty i mapy odsyłaczy; nie interpretuje bloków DSL
+jako kontraktów FEATURE/BUGFIX ani jako dowodów wykonania testów.
 
 1. Wybierz pełny SHA opublikowanej wersji standardu i zweryfikuj jego pochodzenie przez używany proces adopcji. Standard nie nadaje sam sobie statusu opublikowanego.
 2. Utwórz `.governance/docs.json` w normalnym tickecie integracyjnym. Wstaw prawdziwy identyfikator repozytorium, pełną rewizję i SHA-256 dokładnych bajtów `docs/standard/policy.json`:
