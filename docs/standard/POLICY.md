@@ -1,4 +1,4 @@
-# Standard informacji i planów refaktoryzacji — wellmanifest/docs 0.4.0
+# Standard informacji i planów refaktoryzacji — wellmanifest/docs 0.5.0
 
 Słowa MUSI, NIE WOLNO i POWINIEN określają odpowiednio wymaganie, zakaz i zalecenie. `policy.json` jest kanonicznym katalogiem ścieżek, metadanych i sekcji; ten dokument opisuje ich znaczenie. HOME standardu: wellmanifest; projekty Subactor ADOPT ten pakiet i pozostają właścicielami swojego kodu oraz informacji.
 
@@ -87,8 +87,8 @@ Wersja, data i priorytet nie należą do nazwy.
 
 Obowiązuje istniejący wyjątek układu `subactor/docs` z prefiksem
 `architecture/` i indeksem `README.md`. Raport organizacyjny nadal należy do
-`org/report`. Profil można adoptować w dowolnym repo; `--fleet` nadal
-obejmuje wyłącznie lokalne checkouty Subactor.
+`org/report`. Profil można adoptować w dowolnym repo. Domyślny `--fleet`
+wybiera Subactor; jawny `--namespace` rozszerza audyt zgodnie z DOCS-011.
 
 Nie tworzymy katalogu URGENT. Pilność to `priority: P0|P1|P2|P3`;
 P0/P1 oznaczają pilne prace zgodnie z klasyfikacją projektu. Poprawka pozostaje
@@ -174,6 +174,40 @@ Przy zaufanym `--base` checker potwierdza istnienie starej ścieżki oraz wzrost
 version względem poprzednich zarządzanych metadanych. Audyt bez bazy i preflight
 sprawdzają strukturę mapy, nie jej pochodzenie. Nowy plik z mapą nie może
 udawać historycznej ścieżki w bramie publikacji.
+
+## DOCS-011 — Jawne pokrycie pilotażu i floty
+
+`--fleet` audytuje bezpośrednie checkouty pod wskazanym katalogiem. Opcję
+można powtarzać dla kilku katalogów, także kontenerów zagnieżdżonych.
+Nie ma rekursji do `.worktrees`, archiwów ani repozytoriów organizacji w sieci.
+`--namespace semcod --namespace autogrammar` zastępuje domyślne `subactor`;
+wartości są dokładnymi nazwami właścicieli GitHub, bez `/` i wildcardów.
+Porównanie nazw organizacji nie zależy od wielkości liter. Filtr nie zmienia
+właściciela dokumentu, zakresu, przypięcia ani granic uprawnień.
+
+Raport MUSI pokazywać `namespace_counts`, pominięte wpisy z przyczynami oraz
+ścieżkę, HEAD i dirty state każdego badanego checkoutu. Brak obserwowalnego
+commitu lub statusu checkoutu jest błędem. Brak choć jednej żądanej organizacji,
+nieosiągalny lub dowiązany root oraz nierozpoznany origin checkoutu oznaczają
+błąd, a nie zgodność. Rozpoznajemy dokładnie host GitHub przez HTTPS lub SSH;
+nie wypisujemy URL z ewentualnymi danymi uwierzytelnienia.
+
+`repositories_checked` zachowuje historyczne znaczenie liczby checkoutów;
+`unique_repositories_checked` liczy różne deklarowane origin. Powtórzenie tej
+samej ścieżki nie powiela kontroli. Różne checkouty tego samego origin są
+sprawdzane wszystkie: czysta kopia nie może ukryć niezgodnej. `duplicates`
+jest obserwacją tożsamości, NIE dowodem zbędności danych ani zgodą na usunięcie.
+Lokalny origin nie dowodzi aktualnej tożsamości zdalnej; przekierowania GitHub
+wymagają osobnego uzgodnienia. Checker nie pobiera repozytoriów ani nie zmienia
+Issues, plików, historii, pinów lub chronionego CI.
+
+Pilotaż rozdziela: odkrycie checkoutów, zgodność dokumentów, integrację
+generatora, rzeczywiste egzekwowanie CI i publikację. `ok: true` dotyczy tylko
+wybranego lokalnego zakresu; nie dowodzi migracji wszystkich historycznych
+Markdownów. Przed masową adopcją wymagane są canary negatywne w procesie
+konsumenta: brak adopcji, rozbieżny pin, brak indeksu, błędny cel oraz błędny
+kontrakt DSL MUSZĄ zatrzymać odpowiedni etap. Zmiany chronionej konfiguracji
+przechodzą odrębny zaufany proces. Wynik lokalnego testu go nie zastępuje.
 
 ## DOCS-001 — Zakres
 

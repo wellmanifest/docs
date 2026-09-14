@@ -104,7 +104,24 @@ python3 "$DOCS_STANDARD_ROOT/docs/standard/check.py" \
   --standard-revision "$DOCS_STANDARD_REVISION"
 ```
 
-To audyt read-only bezpośrednich lokalnych checkoutów z origin `subactor/*`.
+Domyślnie jest to audyt read-only bezpośrednich checkoutów `subactor/*`.
+Od 0.5 można jawnie wybrać inne organizacje i kontenery:
+
+```bash
+python3 "$DOCS_STANDARD_ROOT/docs/standard/check.py" \
+  --fleet /path/to/semcod --fleet /path/to/semcod/taskand \
+  --fleet /path/to/autogrammar --namespace semcod --namespace autogrammar \
+  --standard-revision "$DOCS_STANDARD_REVISION" \
+  --policy-dsl-root "$POLICY_DSL_ROOT"
+```
+
+Każda żądana organizacja musi mieć co najmniej jeden badany checkout.
+Raport podaje pominięcia, liczbę checkoutów i unikalnych origin oraz wszystkie
+kopie powtórzonego repozytorium. Kopie są badane oddzielnie; żadna nie jest
+usuwana. Zagnieżdżone kontenery trzeba wskazać jawnie, bez rekursji do worktrees.
+Zobacz [zasady pokrycia](docs/standard/POLICY.md#docs-011--jawne-pokrycie-pilotażu-i-floty)
+i [wyniki pilotażu](docs/ANALYSIS/FLEET_COVERAGE_PILOT.md).
+
 Nie jest dowodem adopcji wszystkich repozytoriów organizacji GitHub. Brak pliku
 adopcji jest raportowany jako brak, a nie jako zgodność. Instalacja pakietu ani
 wpisanie wytycznej do AGENTS nie oznacza, że każdy pipeline już uruchamia gate.
@@ -113,6 +130,7 @@ Adopcję floty zamyka się dopiero po dowodach z każdego objętego repozytorium
 ## Walidacja standardu
 
 ```bash
+DOCS_PILOT_WORKSPACE=/path/to/github \
 POLICY_DSL_ROOT=/path/to/pinned/policy-dsl \
 python3 -m unittest discover -s docs/standard/tests -v
 ./project/governance-check.sh
@@ -121,6 +139,10 @@ python3 -m unittest discover -s docs/standard/tests -v
 Bez `POLICY_DSL_ROOT` suite jawnie pomija testy integracji parsera. Nie jest
 to pełna walidacja kontraktów; przed publikacją wymagane jest wykonanie suite
 z przypiętym runtime i bez pominiętych testów integracyjnych.
+`DOCS_PILOT_WORKSPACE` włącza odtwarzalne pilotaże opublikowanego corpus
+Koru, Goal i Taskand. Wskazane w testach pełne rewizje muszą istnieć lokalnie;
+nie ma automatycznego fetch. Błędy wprowadzane są wyłącznie w testowych fixture,
+nigdy w checkoutach konsumentów. Bez zmiennej testy corpus są jawnie pomijane.
 
 Polityka należy do tego pakietu. Checker jest testem zgodności, nie generatorem
 produktowym, kontrolerem publikacji ani źródłem uprawnień. Implementacje i
