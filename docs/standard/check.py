@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import importlib.util
 import json
 import re
 import subprocess
@@ -13,6 +14,9 @@ from posixpath import relpath
 from urllib.parse import unquote, urlsplit
 
 PACK = Path(__file__).resolve().parent
+CONTRACT_SPEC = importlib.util.spec_from_file_location('docs_change_contract', PACK / 'change_contract.py')
+CONTRACT = importlib.util.module_from_spec(CONTRACT_SPEC)
+CONTRACT_SPEC.loader.exec_module(CONTRACT)
 POLICY_BYTES = (PACK / 'policy.json').read_bytes()
 POLICY = json.loads(POLICY_BYTES)
 POLICY_SHA256 = hashlib.sha256(POLICY_BYTES).hexdigest()
@@ -128,7 +132,7 @@ def report_home(repository, scope):
     return repository
 
 
-def prepare_delivery(root, revision, kind, slug, scope, destination, compact=False):
+def prepare_delivery(root, revision, kind, slug, scope, destination, compact=False, policy_dsl_root=None):
     """Fail closed before generation; consumers must require ok before writing."""
     root = Path(root).resolve()
     repository = origin(root)
@@ -153,7 +157,7 @@ def prepare_delivery(root, revision, kind, slug, scope, destination, compact=Fal
         fail('DOCS_LOCATION', 'Expected repository-relative destination: ' + expected_path.as_posix())
     # Reuse adoption, tracked index and existing document validation. Do not
     # declare the not-yet-generated document, which is intentionally absent.
-    existing = check(root, revision)
+    existing = check(root, revision, policy_dsl_root=policy_dsl_root)
     findings.extend(existing['findings'])
     plan = {'schema': 'wellmanifest.docs/delivery-plan/v1', 'repository': repository,
             'owner': owner, 'scope': scope, 'kind': kind, 'id': slug,
@@ -271,7 +275,7 @@ def check_changelog(root, files, fail):
         # should link whole documents to avoid fragile heading fragments.
 
 
-def check(root, revision, deliverables=(), today=None, base=None):
+def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_root=None):
     root = Path(root).resolve()
     findings, warnings = [], []
     def fail(code, path, message):
@@ -383,6 +387,11 @@ def check(root, revision, deliverables=(), today=None, base=None):
             continue
         if meta['id'] in ids:
             fail('DOCS_DUPLICATE_ID', name, 'One canonical owner and one document for this id')
+        if compact:
+            try:
+                CONTRACT.check(body, meta, root, files, safe_path, policy_dsl_root)
+            except CONTRACT.ContractError as error:
+                fail(error.code, name, str(error))
         ids.add(meta['id'])
         expected_path, index = layout(repository, meta['kind'], meta['id'], compact)
         if compact:
@@ -442,6 +451,7 @@ def main():
     targets.add_argument('--fleet', type=Path, help='Read-only audit of immediate local subactor/* Git checkouts')
     p.add_argument('--standard-revision', required=True, help='Full revision selected by trusted CI, never by the candidate document')
     p.add_argument('--base', help='Trusted base SHA for version-increment checks')
+    p.add_argument('--policy-dsl-root', type=Path, help='Trusted checkout matching policy-dsl.lock.json; required only for DSL contracts')
     p.add_argument('--deliverable', action='append', default=[])
     p.add_argument('--prepare', action='store_true', help='Read-only mandatory pre-generation placement check')
     p.add_argument('--kind', choices=sorted(set(POLICY['kinds']) | set(POLICY['compact']['directories'])))
@@ -452,19 +462,19 @@ def main():
     if args.prepare:
         if args.fleet or args.base or len(args.deliverable) != 1 or not all([args.kind, args.slug, args.scope]):
             p.error('--prepare requires --root, --kind, --id, --scope and exactly one --deliverable, without --base')
-        result = prepare_delivery(args.root, args.standard_revision, args.kind, args.slug, args.scope, args.deliverable[0], args.format == 'v2')
+        result = prepare_delivery(args.root, args.standard_revision, args.kind, args.slug, args.scope, args.deliverable[0], args.format == 'v2', args.policy_dsl_root)
     elif args.kind or args.slug or args.scope or args.format:
         p.error('--kind, --id and --scope require --prepare')
     elif args.fleet:
         if args.deliverable or args.base:
             p.error('--deliverable applies to a single --root')
-        reports = [check(path, args.standard_revision) for path in sorted(args.fleet.iterdir())
+        reports = [check(path, args.standard_revision, policy_dsl_root=args.policy_dsl_root) for path in sorted(args.fleet.iterdir())
                    if path.is_dir() and not path.is_symlink() and (path / '.git').exists()
                    and (origin(path) or '').startswith(POLICY['profile']['required_namespace'])]
         result = {'ok': bool(reports) and all(r['ok'] for r in reports), 'coverage': 'local-checkouts-only',
                   'repositories_checked': len(reports), 'reports': reports}
     else:
-        result = check(args.root, args.standard_revision, args.deliverable, base=args.base)
+        result = check(args.root, args.standard_revision, args.deliverable, base=args.base, policy_dsl_root=args.policy_dsl_root)
     print(json.dumps(result, indent=2))
     return 0 if result['ok'] else 1
 

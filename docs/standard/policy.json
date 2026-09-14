@@ -1,7 +1,16 @@
 {
   "schema": "wellmanifest.docs/policy/v1",
   "id": "wellmanifest/docs",
-  "version": "0.3.0",
+  "version": "0.4.0",
+  "change_contract": {
+    "profile": "wellmanifest.docs/change/v1",
+    "carrier": "single-dsl-fence-in-compact-document",
+    "kinds": ["feature", "bugfix"],
+    "runtime_lock": "policy-dsl.lock.json",
+    "authority": "none",
+    "assertions_evaluated": false,
+    "tests_executed": false
+  },
   "compact": {
     "document_schema": "wellmanifest.docs/document/v2",
     "filename_pattern": "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$",
