@@ -137,7 +137,7 @@ class Fleet(unittest.TestCase):
         for url in ['https://evilgithub.com/subactor/example',
                     'https://evil.test/github.com/subactor/example',
                     'https://user:secret@github.com/subactor/example',
-                    'https://github.com/subactor/example?token=secret']:
+                    'https://github.com/subactor/example?ref=fixture']:
             self.git(root, 'remote', 'set-url', 'origin', url)
             self.assertIsNone(checker.origin(root))
 
