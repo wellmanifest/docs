@@ -347,5 +347,211 @@ class Conformance(unittest.TestCase):
         self.assertTrue(json.loads(result.stdout)['ok'])
 
 
+class CompactConformance(unittest.TestCase):
+    def setUp(self):
+        self.fixture = Conformance()
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        self.root = self.fixture.root
+        self.git = self.fixture.git
+        self.name = 'docs/FEATURE/PROVIDER_DNS_CHANGE_DETECTION.md'
+        self.meta = {
+            'schema': checker.POLICY['compact']['document_schema'],
+            'id': 'provider-dns-change-detection', 'kind': 'feature',
+            'version': 1, 'title': 'Detect provider DNS changes',
+            'status': 'proposed', 'owner': 'subactor/example',
+            'scope': 'repository', 'updated': '2026-09-14',
+            'priority': 'P2', 'source_revision': 'b' * 40,
+            'evidence': ['receipt:dns-regression']
+        }
+        self.write()
+
+    def write(self, body=None):
+        path = self.root / self.name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if body is None:
+            body = '# DNS change detection\n' + '\n'.join(
+                '<!-- docs:section ' + section + ' -->\nConcrete bounded observation.\n'
+                for section in checker.POLICY['compact']['sections'])
+        path.write_text('---\n' + json.dumps(self.meta) + '\n---\n' + body)
+        (self.root / 'docs/README.md').write_text(
+            '[Legacy](refactoring/publication.md)\n[DNS](' + self.name[5:] + ')\n')
+        self.git('add', '.')
+
+    def codes(self, **kwargs):
+        return self.fixture.codes(**kwargs)
+
+    def base(self):
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.org',
+                 'commit', '-qm', 'baseline')
+        return self.git('rev-parse', 'HEAD')
+
+    def changelog(self, text):
+        (self.root / 'CHANGELOG.md').write_text(text)
+        self.git('add', 'CHANGELOG.md')
+
+    def test_compact_and_legacy_coexist(self):
+        self.assertEqual(self.codes(), set())
+
+    def test_non_string_schema_is_a_finding_not_a_crash(self):
+        self.meta['schema'] = [checker.POLICY['compact']['document_schema']]
+        self.write()
+        self.assertIn('DOCS_METADATA', self.codes())
+
+    def test_all_kinds_have_uppercase_paths(self):
+        for kind, directory in checker.POLICY['compact']['directories'].items():
+            path, index = checker.layout('subactor/example', kind, 'dns-change', True)
+            self.assertEqual(str(path), 'docs/' + directory + '/DNS_CHANGE.md')
+            self.assertEqual(index, 'docs/README.md')
+        path, index = checker.layout('subactor/docs', 'analysis', 'dns-change', True)
+        self.assertEqual(str(path), 'architecture/ANALYSIS/DNS_CHANGE.md')
+        self.assertEqual(index, 'README.md')
+
+    def test_wrong_case_and_urgent_directory_fail(self):
+        old = self.root / self.name
+        self.name = 'docs/URGENT/provider_dns_change_detection.md'
+        old.unlink()
+        self.write()
+        self.assertTrue({'DOCS_FILENAME', 'DOCS_LOCATION'} <= self.codes())
+
+    def test_priority_changes_preserve_path(self):
+        self.meta['priority'] = 'P0'
+        self.write()
+        self.assertEqual(self.codes(), set())
+        self.meta['priority'] = 'urgent'
+        self.write()
+        self.assertIn('DOCS_METADATA', self.codes())
+
+    def test_compact_requires_owner_scope_and_no_unknown_fields(self):
+        original = dict(self.meta)
+        for key, value, expected in [
+                ('owner', 'subactor/other', 'DOCS_OWNER'),
+                ('scope', 'organization', 'DOCS_OWNER'),
+                ('review_after', '2026-10-01', 'DOCS_METADATA'),
+                ('source_revision', 'main', 'DOCS_METADATA')]:
+            with self.subTest(key=key):
+                self.meta = dict(original, **{key: value})
+                self.write()
+                self.assertIn(expected, self.codes())
+
+    def test_compact_size_limits_include_metadata_and_code(self):
+        for padding in ['\n' * 121, 'word ' * 601, 'ą' * 6200]:
+            with self.subTest(size=len(padding)):
+                self.write()
+                path = self.root / self.name
+                path.write_text(path.read_text() + padding)
+                self.assertIn('DOCS_SIZE', self.codes())
+
+    def test_compact_missing_section_fails(self):
+        self.write(body='<!-- docs:section summary -->\nOnly a summary.')
+        self.assertIn('DOCS_SECTIONS', self.codes())
+
+    def test_compact_rejects_extra_sections(self):
+        path = self.root / self.name
+        path.write_text(path.read_text() + '\n<!-- docs:section extra -->\nMore prose.')
+        self.assertIn('DOCS_SECTIONS', self.codes())
+
+    def test_compact_version_increment_is_required(self):
+        base = self.base()
+        self.meta['title'] = 'Updated findings'
+        self.write()
+        self.assertIn('DOCS_VERSION', self.codes(base=base))
+        self.meta['version'] = 2
+        self.write()
+        self.assertEqual(self.codes(base=base), set())
+
+    def test_compact_metadata_removal_is_not_discovery_escape(self):
+        base = self.base()
+        (self.root / self.name).write_text('# No metadata')
+        self.assertIn('DOCS_METADATA', self.codes(base=base))
+
+    def test_compact_symlink_is_not_discovery_escape(self):
+        base = self.base()
+        path = self.root / self.name
+        path.unlink()
+        path.symlink_to(self.root / 'docs/refactoring/publication.md')
+        self.assertIn('DOCS_LOCATION', self.codes(base=base))
+
+    def test_prepare_compact_format_and_existing_default(self):
+        result = checker.prepare_delivery(self.root, REV, 'bugfix', 'dns-timeout',
+                    'repository', 'docs/BUGFIX/DNS_TIMEOUT.md', compact=True)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['plan']['document_schema'], self.meta['schema'])
+        result = checker.prepare_delivery(self.root, REV, 'feature', 'dns-timeout',
+                    'repository', 'docs/FEATURE/DNS_TIMEOUT.md')
+        self.assertFalse(result['ok'])
+
+    def test_compact_cli_preparation(self):
+        command = [sys.executable, str(checker.PACK / 'check.py'), '--root', str(self.root),
+                   '--standard-revision', REV, '--prepare', '--format', 'v2',
+                   '--kind', 'feature', '--id', 'dns-timeout', '--scope', 'repository',
+                   '--deliverable', 'docs/FEATURE/DNS_TIMEOUT.md']
+        result = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+
+    def test_changelog_inline_and_reference_links(self):
+        self.changelog('- DNS [description](' + self.name + ').\n'
+                       '- [Details][dns]\n[dns]: ' + self.name + '\n')
+        self.assertEqual(self.codes(), set())
+
+    def test_changelog_missing_untracked_deleted_and_symlink_targets(self):
+        self.changelog('[DNS](' + self.name + ')')
+        path = self.root / self.name
+        path.unlink()
+        self.assertIn('DOCS_CHANGELOG_LINK', self.codes())
+        path.write_text('untracked target')
+        self.git('rm', '--cached', '-f', self.name)
+        self.assertIn('DOCS_CHANGELOG_LINK', self.codes())
+        path.unlink()
+        path.symlink_to(self.root / 'docs/refactoring/publication.md')
+        self.git('add', self.name)
+        self.assertIn('DOCS_CHANGELOG_LINK', self.codes())
+
+    def test_changelog_ignores_external_links_and_code_examples(self):
+        self.changelog('[Web](https://example.org/missing.md)\n'
+                       '```markdown\n[Example](docs/FEATURE/EXAMPLE.md)\n```\n')
+        self.assertEqual(self.codes(), set())
+
+    def test_changelog_rejects_encoded_path_escape(self):
+        self.changelog('[Escape](%2e%2e/outside.md)')
+        self.assertIn('DOCS_CHANGELOG_LINK', self.codes())
+
+    def test_uppercase_extension_cannot_escape_discovery(self):
+        (self.root / self.name).rename(self.root / self.name.replace('.md', '.MD'))
+        self.git('add', '.')
+        self.assertIn('DOCS_LOCATION', self.codes())
+
+    def test_distributed_example_conforms(self):
+        self.git('remote', 'set-url', 'origin', 'https://github.com/wellmanifest/docs.git')
+        self.fixture.adoption['repository'] = 'wellmanifest/docs'
+        self.fixture.write_adoption()
+        (self.root / self.fixture.name).unlink()
+        (self.root / self.name).unlink()
+        self.name = 'docs/ANALYSIS/COMPACT_DOCUMENTATION.md'
+        path = self.root / self.name
+        path.parent.mkdir(parents=True)
+        path.write_text((checker.PACK.parent / 'ANALYSIS/COMPACT_DOCUMENTATION.md').read_text())
+        (self.root / 'docs/README.md').write_text('[Analysis](ANALYSIS/COMPACT_DOCUMENTATION.md)')
+        self.git('add', '.')
+        self.assertEqual(self.codes(), set())
+
+    def test_distributed_template_renders_valid_compact_document(self):
+        template = (checker.PACK / 'templates/COMPACT.md').read_text()
+        replacements = {
+            'stable_slug': self.meta['id'], 'kind': 'feature',
+            'one_sentence_title': 'Detect DNS changes', 'org_repo': 'subactor/example',
+            'YYYY_MM_DD': '2026-09-14', 'full_source_commit': 'b' * 40,
+            'immutable_evidence_reference': 'receipt:dns-regression',
+            'problem_and_expected_or_observed_result': 'Detect changed provider addresses.',
+            'one_topic_cause_or_decision_with_links_to_other_topics': 'Observe DNS on reload.',
+            'acceptance_criterion_command_result_and_evidence_or_explicit_gap': 'Regression test pending.',
+            'compatibility_rollback_owner_and_next_action_or_reasoned_not_applicable': 'Owner: subactor/example; revert the observer if needed.'
+        }
+        for key, value in replacements.items():
+            template = template.replace('{{' + key + '}}', value)
+        (self.root / self.name).write_text(template)
+        self.assertEqual(self.codes(), set())
+
+
 if __name__ == '__main__':
     unittest.main()

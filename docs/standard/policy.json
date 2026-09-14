@@ -1,7 +1,38 @@
 {
   "schema": "wellmanifest.docs/policy/v1",
   "id": "wellmanifest/docs",
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "compact": {
+    "document_schema": "wellmanifest.docs/document/v2",
+    "filename_pattern": "^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$",
+    "directories": {
+      "bugfix": "BUGFIX",
+      "feature": "FEATURE",
+      "service": "SERVICE",
+      "information": "INFORMATION",
+      "analysis": "ANALYSIS",
+      "refactoring-plan": "REFACTORING",
+      "decision": "DECISION"
+    },
+    "metadata": {
+      "schema": "string",
+      "id": "slug",
+      "kind": "compact_kind",
+      "version": "positive_integer",
+      "title": "string",
+      "status": "status",
+      "owner": "string",
+      "scope": "scope",
+      "updated": "date",
+      "source_revision": "sha40",
+      "priority": "priority",
+      "evidence": "references"
+    },
+    "priorities": ["P0", "P1", "P2", "P3"],
+    "sections": ["summary", "details", "validation", "risks"],
+    "limits": {"max_lines": 120, "max_words": 600, "max_bytes": 12288},
+    "changelog": "CHANGELOG.md"
+  },
   "document_schema": "wellmanifest.docs/document/v1",
   "adoption_schema": "wellmanifest.docs/adoption/v1",
   "profile": {

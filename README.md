@@ -4,6 +4,17 @@ Standard tworzenia i przechowywania informacji, analiz, decyzji i planów refakt
 
 HOME: `wellmanifest` · SHAPE: `domain_pack` · ADOPT przez konsumentów: `wellmanifest/docs`.
 
+Profil kompaktowy v2: `docs/FEATURE/PROVIDER_DNS_CHANGE_DETECTION.md`,
+`docs/BUGFIX/CONFIG_RELOAD_TIMEOUT.md` lub `docs/SERVICE/CACHE_CLEANUP.md`.
+Jeden temat, cztery sekcje, najwyżej 120 linii / 600 słów / 12 KiB.
+URGENT to priorytet P0/P1 w metadanych; nazwa i link pozostają stabilne.
+Changelog zawiera krótki skutek i link. Zobacz
+[reguły v2](docs/standard/POLICY.md#docs-009--profil-kompaktowy-v2),
+[szablon](docs/standard/templates/COMPACT.md) i
+[pomiar przykładów](docs/ANALYSIS/COMPACT_DOCUMENTATION.md).
+Poniższe wcześniejsze przykłady v1 pozostają interfejsem kompatybilności;
+nowy generator wybiera jawnie `--format v2`.
+
 - [Wytyczne normatywne DOCS-001–008](docs/standard/POLICY.md)
 - [Maszynowy katalog kontraktu](docs/standard/policy.json)
 - [Szablon informacji](docs/standard/templates/information.md)
