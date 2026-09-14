@@ -31,7 +31,7 @@ def origin(root):
         return None
     result = subprocess.run(['git', 'remote', 'get-url', 'origin'], cwd=root,
                             capture_output=True, text=True, check=False)
-    match = re.search(r'github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?$', result.stdout.strip())
+    match = re.fullmatch(r'(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([\w.-]+/[\w.-]+?)(?:\.git)?', result.stdout.strip(), re.I)
     return match.group(1) if result.returncode == 0 and match else None
 
 
@@ -444,11 +444,82 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
             'scope': POLICY['adoption_scope'], 'findings': findings, 'warnings': warnings}
 
 
+def check_fleet(roots, revision, namespaces=None, policy_dsl_root=None):
+    """Audit every selected checkout, including divergent copies; never fetch."""
+    if not SHA.fullmatch(revision):
+        raise ValueError('Trusted standard revision must be a full immutable SHA')
+    namespaces = namespaces if namespaces is not None else [POLICY['profile']['required_namespace'].rstrip('/')]
+    if (not namespaces or any(not isinstance(n, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*', n)
+                              for n in namespaces)):
+        raise ValueError('Namespaces must be explicit GitHub owner names, without slashes or wildcards')
+    namespaces = sorted({n.lower() for n in namespaces})
+    reports, skipped, findings = [], [], []
+    seen, identities = set(), {}
+    counts = dict.fromkeys(namespaces, 0)
+    for supplied in roots:
+        root = Path(supplied).absolute()
+        if any(p.is_symlink() for p in (root, *root.parents)) or not root.is_dir():
+            findings.append({'code': 'DOCS_FLEET_ROOT', 'path': str(root)})
+            continue
+        try:
+            children = sorted(root.iterdir())
+        except OSError:
+            findings.append({'code': 'DOCS_FLEET_ROOT', 'path': str(root)})
+            continue
+        for path in children:
+            reason = None
+            if path.is_symlink():
+                reason = 'symlink'
+            elif not path.is_dir() or not (path / '.git').exists():
+                reason = 'not-immediate-checkout'
+            elif path.resolve() in seen:
+                reason = 'repeated-path'
+            if reason:
+                skipped.append({'path': str(path), 'reason': reason})
+                continue
+            seen.add(path.resolve())
+            repository = origin(path)
+            if not repository:
+                skipped.append({'path': str(path), 'reason': 'unresolved-github-origin'})
+                findings.append({'code': 'DOCS_FLEET_ORIGIN', 'path': str(path)})
+                continue
+            namespace = repository.split('/')[0].lower()
+            if namespace not in counts:
+                skipped.append({'path': str(path), 'repository': repository, 'reason': 'namespace-not-selected'})
+                continue
+            counts[namespace] += 1
+            identities.setdefault(repository.lower(), []).append(str(path))
+            try:
+                report = check(path, revision, policy_dsl_root=policy_dsl_root)
+            except (OSError, ValueError, UnicodeError):
+                report = {'ok': False, 'repository': repository,
+                          'findings': [{'code': 'DOCS_CHECKOUT_READ'}], 'warnings': []}
+            head = subprocess.run(['git', 'rev-parse', '--verify', 'HEAD^{commit}'],
+                                  cwd=path, capture_output=True, text=True, check=False)
+            status = subprocess.run(['git', '--no-optional-locks', 'status', '--porcelain', '--untracked-files=normal'],
+                                    cwd=path, capture_output=True, text=True, check=False)
+            head_sha = head.stdout.strip() if head.returncode == 0 else None
+            if head_sha is None or status.returncode:
+                findings.append({'code': 'DOCS_FLEET_OBSERVATION', 'path': str(path)})
+            reports.append(dict(report, checkout=str(path), head_sha=head_sha,
+                                working_tree_dirty=bool(status.stdout) if status.returncode == 0 else None))
+    for namespace, count in counts.items():
+        if not count:
+            findings.append({'code': 'DOCS_FLEET_EMPTY', 'namespace': namespace})
+    return {'ok': bool(reports) and not findings and all(r['ok'] for r in reports),
+            'coverage': 'local-checkouts-only', 'discovery': 'immediate-children-of-explicit-roots',
+            'namespaces': namespaces, 'namespace_counts': counts,
+            'repositories_checked': len(reports), 'unique_repositories_checked': len(identities),
+            'duplicates': [{'repository': repo, 'checkouts': paths} for repo, paths in sorted(identities.items()) if len(paths) > 1],
+            'findings': findings, 'skipped': skipped, 'reports': reports}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     targets = p.add_mutually_exclusive_group(required=True)
     targets.add_argument('--root', type=Path)
-    targets.add_argument('--fleet', type=Path, help='Read-only audit of immediate local subactor/* Git checkouts')
+    targets.add_argument('--fleet', type=Path, action='append', help='Read-only audit of immediate Git checkouts; repeat for nested containers')
+    p.add_argument('--namespace', action='append', help='Explicit GitHub owner for --fleet; repeat to select multiple owners (default: subactor)')
     p.add_argument('--standard-revision', required=True, help='Full revision selected by trusted CI, never by the candidate document')
     p.add_argument('--base', help='Trusted base SHA for version-increment checks')
     p.add_argument('--policy-dsl-root', type=Path, help='Trusted checkout matching policy-dsl.lock.json; required only for DSL contracts')
@@ -459,6 +530,8 @@ def main():
     p.add_argument('--id', dest='slug')
     p.add_argument('--scope', choices=POLICY['delivery_scopes'])
     args = p.parse_args()
+    if args.namespace and not args.fleet:
+        p.error('--namespace requires --fleet')
     if args.prepare:
         if args.fleet or args.base or len(args.deliverable) != 1 or not all([args.kind, args.slug, args.scope]):
             p.error('--prepare requires --root, --kind, --id, --scope and exactly one --deliverable, without --base')
@@ -468,11 +541,10 @@ def main():
     elif args.fleet:
         if args.deliverable or args.base:
             p.error('--deliverable applies to a single --root')
-        reports = [check(path, args.standard_revision, policy_dsl_root=args.policy_dsl_root) for path in sorted(args.fleet.iterdir())
-                   if path.is_dir() and not path.is_symlink() and (path / '.git').exists()
-                   and (origin(path) or '').startswith(POLICY['profile']['required_namespace'])]
-        result = {'ok': bool(reports) and all(r['ok'] for r in reports), 'coverage': 'local-checkouts-only',
-                  'repositories_checked': len(reports), 'reports': reports}
+        try:
+            result = check_fleet(args.fleet, args.standard_revision, args.namespace, args.policy_dsl_root)
+        except ValueError as error:
+            p.error(str(error))
     else:
         result = check(args.root, args.standard_revision, args.deliverable, base=args.base, policy_dsl_root=args.policy_dsl_root)
     print(json.dumps(result, indent=2))

@@ -1,0 +1,35 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-011",
+  "summary": "Explicit multi-namespace fleet audit and consumer pilots",
+  "workstream": "integration",
+  "classification": {
+    "kind": "FEATURE",
+    "priority": "P2",
+    "origin": "requested"
+  },
+  "allowedPaths": ["project/ticket-011/**", "TODO.md", "project/TICKETS.md", "docs/standard/**", "docs/ANALYSIS/FLEET_COVERAGE_PILOT.md", "docs/README.md", "README.md", "CHANGELOG.md", "VERSION"],
+  "forbiddenPaths": ["project/ticket-*/user-*.md"],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "867241833a7e69188d595505d116115736438c7a",
+    "targetBranch": "main",
+    "outcome": "Publish tested explicit fleet coverage and evidence-based pilot guidance through independent review",
+    "nonGoals": ["Consumer source changes in this ticket", "Changing protected CI", "Automatic deletion or semantic deduplication", "Enabling disabled GitHub Issues"],
+    "complexity": "L", "estimatedMinutes": 90,
+    "budgets": {"maxImplementationFiles": 15, "maxAffectedComponents": 2, "maxPublicInterfaceChanges": 1, "maxRuntimeDependencies": 1},
+    "architecture": {
+      "status": "accepted", "decision": "Explicit namespace filters with complete local checkout observations; never infer fleet compliance from empty or partial coverage",
+      "components": [{"name": "standard", "paths": ["docs/standard/**"]}, {"name": "guidance", "paths": ["docs/ANALYSIS/**", "docs/README.md", "README.md", "CHANGELOG.md", "VERSION"]}],
+      "responsibilityChanges": false, "interfaceChanges": ["Repeatable --namespace for --fleet plus coverage diagnostics"],
+      "dataChanges": ["Read-only fleet coverage and skipped checkout observations"],
+      "ui": {"impact": "none", "states": [], "evidence": []},
+      "rollback": "Restore the previous published standard pin; preserve all consumer documentation."
+    },
+    "runtimeDependencies": ["wellmanifest/policy-dsl@7109aee92c2bb7ac2db8e3b0b4ddd7ded4750257"],
+    "validation": [{"criterion": "AC-03", "commands": ["DOCS_PILOT_WORKSPACE=$TRUSTED_PILOT_WORKSPACE POLICY_DSL_ROOT=$TRUSTED_POLICY_DSL_ROOT python3 -m unittest discover -s docs/standard/tests", "./project/governance-check.sh --base origin/main --head HEAD"], "evidence": "docs/ANALYSIS/FLEET_COVERAGE_PILOT.md"}]
+  }
+}

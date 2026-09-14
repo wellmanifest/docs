@@ -1,5 +1,7 @@
 # Dokumentacja standardu
 
+- [Pokrycie floty](ANALYSIS/FLEET_COVERAGE_PILOT.md) — pilotaż semcod/autogrammar, pominięcia i granice gotowości.
+
 - [Kontrakty FEATURE/BUGFIX](FEATURE/CHANGE_CONTRACTS.md) — kryteria i pliki testów w Policy DSL.
 - [Niejednoznaczne bloki DSL](BUGFIX/DUPLICATE_DSL_CONTRACT.md) — reprodukcja, zmiana zachowania i regresja.
 
