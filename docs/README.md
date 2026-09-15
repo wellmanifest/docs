@@ -1,5 +1,8 @@
 # Dokumentacja standardu
 
+- [Hierarchia Priorytetów Workflow: URGENT -> BUGFIX -> FEATURE -> SERVICE](information/workflow-priority.md) — formalny model szeregowania i ekonomii zapobiegania awariom krytycznym.
+- [Protokół Dźwigni Zasobów i Drenażu Kolejki Zadań](information/autonomous-leverage-and-queue-drain.md) — maksymalizacja reużycia sesji, poświadczeń i narzędzi autogrammar.
+
 - [Pokrycie floty](ANALYSIS/FLEET_COVERAGE_PILOT.md) — pilotaż semcod/autogrammar, pominięcia i granice gotowości.
 
 - [Kontrakty FEATURE/BUGFIX](FEATURE/CHANGE_CONTRACTS.md) — kryteria i pliki testów w Policy DSL.
