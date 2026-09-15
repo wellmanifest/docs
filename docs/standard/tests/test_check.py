@@ -59,6 +59,51 @@ class Conformance(unittest.TestCase):
     def codes(self, **kwargs):
         return {x['code'] for x in self.check(**kwargs)['findings']}
 
+    def completion_fixture(self):
+        self.meta.update(scope='repository', owner='subactor/example')
+        self.write_doc()
+        self.git('add', '.')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'base')
+        base = self.git('rev-parse', 'HEAD')
+        prepared = checker.prepare_delivery(self.root, REV, self.meta['kind'], self.meta['id'],
+                                             'repository', self.name)
+        self.assertTrue(prepared['ok'], prepared)
+        return base, prepared
+
+    def complete(self, base, prepared, paths=None):
+        return checker.complete_delivery(self.root, REV, [self.name] if paths is None else paths, base, prepared)
+
+    def test_completion_requires_explicit_result_and_preflight(self):
+        base, prepared = self.completion_fixture()
+        self.assertFalse(self.complete(base, prepared, [])['ok'])
+        self.assertFalse(self.complete(base, {})['ok'])
+        self.assertFalse(self.complete(None, prepared)['ok'])
+
+    def test_completion_binds_actual_files(self):
+        base, prepared = self.completion_fixture()
+        result = self.complete(base, prepared)
+        self.assertTrue(result['ok'], result)
+        self.assertFalse(result['completion']['publication_verified'])
+        self.assertEqual(len(result['completion']['artifacts']), 2)
+        (self.root / self.name).unlink()
+        self.assertFalse(self.complete(base, prepared)['ok'])
+
+    def test_completion_rejects_recovery_only_result(self):
+        base, prepared = self.completion_fixture()
+        self.assertFalse(self.complete(base, prepared, ['/tmp/report.md'])['ok'])
+        self.git('rm', '--cached', self.name)
+        self.assertFalse(self.complete(base, prepared)['ok'])
+
+    def test_completion_rejects_tampered_plan_or_identity(self):
+        base, prepared = self.completion_fixture()
+        prepared['plan']['owner'] = 'another/repository'
+        self.assertFalse(self.complete(base, prepared)['ok'])
+        prepared = checker.prepare_delivery(self.root, REV, self.meta['kind'], self.meta['id'], 'repository', self.name)
+        self.meta['owner'] = 'role:other'
+        self.meta['version'] += 1
+        self.write_doc()
+        self.assertFalse(self.complete(base, prepared)['ok'])
+
     def test_unavailable_base_is_rejected(self):
         self.assertIn('DOCS_BASE', self.codes(base='f' * 40))
 
