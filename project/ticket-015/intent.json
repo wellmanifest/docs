@@ -1,0 +1,54 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-015",
+  "summary": "Harden readiness receipt deduplication and hostile input handling",
+  "workstream": "integration",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P2",
+    "origin": "requested"
+  },
+  "allowedPaths": [
+    "project/ticket-015/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "docs/standard/readiness.py",
+    "docs/standard/tests/test_readiness.py",
+    "docs/standard/POLICY.md"
+  ],
+  "forbiddenPaths": ["project/ticket-*/user-*.md"],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "69c1c91c07afc7a772c00f7c654ae62e47068946",
+    "targetBranch": "main",
+    "outcome": "Harden readiness receipt deduplication and fail-closed validation",
+    "nonGoals": ["No consumer migration, deployment or authority changes"],
+    "complexity": "S",
+    "estimatedMinutes": 45,
+    "budgets": {
+      "maxImplementationFiles": 4,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 1,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Keep observation identity deterministic and reject malformed nested values without exceptions.",
+      "components": [{"name": "readiness-validation", "paths": ["docs/standard/readiness.py", "docs/standard/tests/test_readiness.py", "docs/standard/POLICY.md"]}],
+      "responsibilityChanges": false,
+      "interfaceChanges": ["Read-only dedup_key helper"],
+      "dataChanges": ["Bounded observation identity for rollout inventory"],
+      "ui": {"impact": "none", "states": [], "evidence": []},
+      "rollback": "Restore the readiness validator from the merged ticket-014 revision."
+    },
+    "runtimeDependencies": [],
+    "validation": [{
+      "criterion": "AC-02",
+      "commands": ["python -m unittest discover -s docs/standard/tests", "./project/governance-check.sh"],
+      "evidence": "docs/standard/POLICY.md"
+    }]
+  }
+}

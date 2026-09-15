@@ -357,4 +357,9 @@ wejść. Minimalne canary CI MUSZĄ odrzucać: brak fazy/evidence, przyszłe dow
 niebezpieczny lub powtórzony root, cofnięcie fazy, zmianę rootów oraz zmianę
 źródła tej samej wersji bez zaakceptowanego review. Lista faz służy do raportu
 gotowości; `verified` nie oznacza zgody na merge, deploy, czyszczenie ani dostęp
-do sekretów.
+do sekretów. Bounded rollout zaczyna się od jednego checkoutu lub namespace;
+inventory deduplikuje identyczny klucz `(repository, standard_revision,
+covered_roots, base_sha, head_sha, phase)`, a nowy HEAD, root lub faza tworzy
+nową obserwację. Promocja do kolejnego adoptera wymaga osobnego receiptu i
+niezależnej bramy CI; brak, duplikat lub rozbieżność receiptów zatrzymuje
+rollout, nie usuwa danych i kieruje sprawę do review człowieka.
