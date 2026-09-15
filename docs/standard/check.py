@@ -444,6 +444,46 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
             'scope': POLICY['adoption_scope'], 'findings': findings, 'warnings': warnings}
 
 
+def complete_delivery(root, revision, deliverables, base, prepared, policy_dsl_root=None):
+    """Bind an explicit result to its pre-generation plan and actual bytes."""
+    root = Path(root).resolve()
+    result = check(root, revision, deliverables, base=base, policy_dsl_root=policy_dsl_root)
+    findings = result['findings']
+    def fail(message):
+        findings.append({'code': 'DOCS_COMPLETION', 'path': '', 'message': message})
+    if not base or len(deliverables) != 1:
+        fail('Completion requires a trusted base and exactly one explicit deliverable per plan')
+    if not isinstance(prepared, dict) or prepared.get('ok') is not True or not isinstance(prepared.get('plan'), dict):
+        fail('A successful pre-generation delivery-plan receipt is required')
+    else:
+        plan = prepared['plan']
+        digest = hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
+        if prepared.get('plan_sha256') != digest:
+            fail('Preparation plan digest mismatch')
+        try:
+            fresh = prepare_delivery(root, revision, plan['kind'], plan['id'], plan['scope'],
+                                     plan['path'], plan.get('document_schema') == POLICY['compact']['document_schema'],
+                                     policy_dsl_root)
+            if not fresh['ok'] or fresh['plan'] != plan:
+                fail('Preparation plan no longer matches repository, policy or placement')
+            if len(deliverables) != 1 or safe_path(root, deliverables[0]) != Path(plan['path']):
+                fail('Explicit deliverable differs from the preparation plan')
+            elif safe_path(root, plan['path']) is not None:
+                meta, _ = metadata((root / plan['path']).read_text())
+                if any(meta.get(k) != plan[k] for k in ('id', 'kind', 'scope', 'owner')):
+                    fail('Document identity or scope differs from the preparation plan')
+        except (KeyError, OSError, ValueError, TypeError):
+            fail('Malformed preparation plan or unavailable deliverable')
+    result['ok'] = not findings
+    result['completion'] = {'ready': not findings, 'publication_verified': False, 'authority': 'none',
+                            'artifacts': []}
+    if not findings:
+        for name in (plan['path'], plan['index']):
+            result['completion']['artifacts'].append({'path': name,
+                'sha256': hashlib.sha256((root / name).read_bytes()).hexdigest()})
+    return result
+
+
 def check_fleet(roots, revision, namespaces=None, policy_dsl_root=None):
     """Audit every selected checkout, including divergent copies; never fetch."""
     if not SHA.fullmatch(revision):
@@ -524,6 +564,8 @@ def main():
     p.add_argument('--base', help='Trusted base SHA for version-increment checks')
     p.add_argument('--policy-dsl-root', type=Path, help='Trusted checkout matching policy-dsl.lock.json; required only for DSL contracts')
     p.add_argument('--deliverable', action='append', default=[])
+    p.add_argument('--complete', action='store_true', help='Require explicit result, trusted base and preparation receipt before completion')
+    p.add_argument('--prepared-plan', type=Path, help='Saved successful --prepare JSON result; evidence only, not authority')
     p.add_argument('--prepare', action='store_true', help='Read-only mandatory pre-generation placement check')
     p.add_argument('--kind', choices=sorted(set(POLICY['kinds']) | set(POLICY['compact']['directories'])))
     p.add_argument('--format', choices=['v1', 'v2'], default=None, help='Preparation format; v1 compatibility or compact v2')
@@ -532,7 +574,17 @@ def main():
     args = p.parse_args()
     if args.namespace and not args.fleet:
         p.error('--namespace requires --fleet')
-    if args.prepare:
+    if args.complete:
+        if args.fleet or args.prepare or not args.prepared_plan or not args.base or len(args.deliverable) != 1 or any([args.kind, args.slug, args.scope, args.format]):
+            p.error('--complete requires --root, --base, one --deliverable and --prepared-plan')
+        try:
+            prepared = json.loads(args.prepared_plan.read_text())
+            result = complete_delivery(args.root, args.standard_revision, args.deliverable, args.base, prepared, args.policy_dsl_root)
+        except (OSError, ValueError, TypeError):
+            result = {'ok': False, 'findings': [{'code': 'DOCS_COMPLETION', 'message': 'Cannot decode preparation receipt'}]}
+    elif args.prepared_plan:
+        p.error('--prepared-plan requires --complete')
+    elif args.prepare:
         if args.fleet or args.base or len(args.deliverable) != 1 or not all([args.kind, args.slug, args.scope]):
             p.error('--prepare requires --root, --kind, --id, --scope and exactly one --deliverable, without --base')
         result = prepare_delivery(args.root, args.standard_revision, args.kind, args.slug, args.scope, args.deliverable[0], args.format == 'v2', args.policy_dsl_root)

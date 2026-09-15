@@ -291,3 +291,21 @@ Operacje deploy, merge, czyszczenie, publikacja i generowanie artefaktów nietek
 Brama publikacji MUSI przekazać zaufany `--base`. Checker obejmuje również każdy nowy lub zmieniony, śledzony plik Markdown względem tej bazy, nawet bez metadanych. Niezmienione dokumenty historyczne pozostają poza migracją. Zastąpienie dokumentu dowiązaniem lub usunięcie metadanych nie usuwa go z kontroli.
 
 `policy.json/discovery` jawnie wyłącza pliki organizacyjne: indeksy README, instrukcje agentów, changelog, TODO, konwencjonalne instrukcje współpracy i bezpieczeństwa, katalogi konfiguracji governance/CI/hostów oraz bezpośrednie pliki Markdown ticketów. Wyjątki dotyczą tylko automatycznego odkrywania: dokument rozpoznany jako zarządzany obecnie lub w bazie, albo wskazany przez `--deliverable`, nadal podlega pełnej kontroli. Nie wolno używać pliku organizacyjnego jako jedynego miejsca raportu końcowego. Kontrola bez bazy jest audytem istniejącego profilu, nie pełną bramą nowych rezultatów; nie wykrywa nieśledzonych plików bez jawnego `--deliverable`.
+
+### Kontrola zakończenia z jawnym rezultatem
+
+Konsument MUSI zachować udany wynik `--prepare`, a przed ogłoszeniem dostarczenia
+wywołać `--complete --root REPO --base TRUSTED_BASE --deliverable PATH
+--prepared-plan RECEIPT --standard-revision PIN`. Każdy dokument ma osobny plan.
+Brak rezultatu lub planu, niezgodność tożsamości, digestu, ścieżki lub przypięcia
+zatrzymuje kontrolę. Brama sprawdza plik w Git, indeks, metadane i wersję
+oraz zwraca digests odczytanych bajtów. Zwykły audyt `check` bez rezultatu nie
+zastępuje tej bramy; sukces audytu pustego zbioru nie oznacza ukończenia zadania.
+
+Plan jest niesygnowanym dowodem deklaracji. Walidator nie dowodzi kolejności
+czasowej przygotowania ani prawdziwości treści. Zaufany konsument wiąże plan
+z zadaniem, wymaga tej kontroli w swojej ścieżce zakończenia i osobno sprawdza
+publikację. `completion.ready` nie oznacza commitu, PR, merge ani uprawnienia.
+Regresja konsumenta musi sprawdzić, że brak planu lub raport tylko w recovery
+blokuje ogłoszenie zakończenia. Samo dodanie tej reguły do AGENTS nie stanowi
+wdrożenia; audyt rozdziela instrukcję, pin, wywołanie i obserwowany wynik.
