@@ -309,3 +309,17 @@ publikację. `completion.ready` nie oznacza commitu, PR, merge ani uprawnienia.
 Regresja konsumenta musi sprawdzić, że brak planu lub raport tylko w recovery
 blokuje ogłoszenie zakończenia. Samo dodanie tej reguły do AGENTS nie stanowi
 wdrożenia; audyt rozdziela instrukcję, pin, wywołanie i obserwowany wynik.
+
+### Verified copies of external standard documentation
+
+An adopter may pass `--managed-copies <trusted-json>`: a path-to-SHA256 map
+selected by its trusted integration from an independently pinned, published
+standard inventory. This input is not discovered in a report or inferred from
+its owner field. Verify the owning standard's full inventory before supplying it.
+Only tracked Markdown under `.governance/docs/` with matching actual bytes may
+be separated from consumer document discovery. Explicit deliverables, product
+documentation paths, symlinks and mismatched hashes always fail. Results enumerate
+`managed_copies_verified`; this verifies copy integrity, not document conformance
+or upstream publication. Preparation binds the same inventory into its plan;
+completion revalidates it. This narrow integration boundary prevents an immutable
+standard manual from being moved into the adopter's product documentation.

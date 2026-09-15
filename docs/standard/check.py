@@ -132,7 +132,7 @@ def report_home(repository, scope):
     return repository
 
 
-def prepare_delivery(root, revision, kind, slug, scope, destination, compact=False, policy_dsl_root=None):
+def prepare_delivery(root, revision, kind, slug, scope, destination, compact=False, policy_dsl_root=None, managed_copies=None):
     """Fail closed before generation; consumers must require ok before writing."""
     root = Path(root).resolve()
     repository = origin(root)
@@ -157,13 +157,15 @@ def prepare_delivery(root, revision, kind, slug, scope, destination, compact=Fal
         fail('DOCS_LOCATION', 'Expected repository-relative destination: ' + expected_path.as_posix())
     # Reuse adoption, tracked index and existing document validation. Do not
     # declare the not-yet-generated document, which is intentionally absent.
-    existing = check(root, revision, policy_dsl_root=policy_dsl_root)
+    existing = check(root, revision, policy_dsl_root=policy_dsl_root, managed_copies=managed_copies)
     findings.extend(existing['findings'])
     plan = {'schema': 'wellmanifest.docs/delivery-plan/v1', 'repository': repository,
             'owner': owner, 'scope': scope, 'kind': kind, 'id': slug,
             'path': expected_path.as_posix(), 'index': index,
             'standard_revision': revision, 'policy_sha256': POLICY_SHA256,
             'authority': 'read-only-placement-evidence'}
+    if managed_copies:
+        plan["managed_copies"] = managed_copies
     if compact:
         plan['document_schema'] = POLICY['compact']['document_schema']
     return {'ok': not findings, 'plan': plan, 'findings': findings,
@@ -275,7 +277,7 @@ def check_changelog(root, files, fail):
         # should link whole documents to avoid fragile heading fragments.
 
 
-def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_root=None):
+def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_root=None, managed_copies=None):
     root = Path(root).resolve()
     findings, warnings = [], []
     def fail(code, path, message):
@@ -348,6 +350,27 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
         if path.is_file() and path.read_text(errors='replace').startswith('---') and any(
                 schema in path.read_text(errors='replace')[:8192] for schema in document_schemas()):
             selected.add(name)
+    verified_copies = []
+    if managed_copies is not None and not isinstance(managed_copies, dict):
+        fail('DOCS_MANAGED_COPY', '', 'Trusted managed-copy inventory must be a path-to-SHA256 object')
+    else:
+        for name, digest in (managed_copies or {}).items():
+            relative = safe_path(root, name) if isinstance(name, str) else None
+            if (relative is None or not name.startswith('.governance/docs/')
+                    or not name.endswith('.md') or name in deliverables
+                    or name not in files or not isinstance(digest, str)
+                    or re.fullmatch('[0-9a-f]{64}', digest) is None):
+                fail('DOCS_MANAGED_COPY', name, 'Only tracked external standard documentation may be excluded; never a deliverable')
+                continue
+            try:
+                actual = hashlib.sha256((root / relative).read_bytes()).hexdigest()
+            except OSError:
+                actual = None
+            if actual != digest:
+                fail('DOCS_MANAGED_COPY', name, 'Actual bytes differ from independently trusted standard-copy digest')
+                continue
+            selected.discard(name)
+            verified_copies.append({'path': name, 'sha256': digest})
     ids = set()
     for name in sorted(selected):
         if safe_path(root, name) is None:
@@ -441,13 +464,13 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
                 fail('DOCS_INDEX', name, 'Link the canonical document from ' + index)
     check_changelog(root, files, fail)
     return {'ok': not findings, 'repository': repository, 'documents_checked': len(selected),
-            'scope': POLICY['adoption_scope'], 'findings': findings, 'warnings': warnings}
+            'scope': POLICY['adoption_scope'], 'managed_copies_verified': verified_copies, 'findings': findings, 'warnings': warnings}
 
 
-def complete_delivery(root, revision, deliverables, base, prepared, policy_dsl_root=None):
+def complete_delivery(root, revision, deliverables, base, prepared, policy_dsl_root=None, managed_copies=None):
     """Bind an explicit result to its pre-generation plan and actual bytes."""
     root = Path(root).resolve()
-    result = check(root, revision, deliverables, base=base, policy_dsl_root=policy_dsl_root)
+    result = check(root, revision, deliverables, base=base, policy_dsl_root=policy_dsl_root, managed_copies=managed_copies)
     findings = result['findings']
     def fail(message):
         findings.append({'code': 'DOCS_COMPLETION', 'path': '', 'message': message})
@@ -463,7 +486,7 @@ def complete_delivery(root, revision, deliverables, base, prepared, policy_dsl_r
         try:
             fresh = prepare_delivery(root, revision, plan['kind'], plan['id'], plan['scope'],
                                      plan['path'], plan.get('document_schema') == POLICY['compact']['document_schema'],
-                                     policy_dsl_root)
+                                     policy_dsl_root, managed_copies)
             if not fresh['ok'] or fresh['plan'] != plan:
                 fail('Preparation plan no longer matches repository, policy or placement')
             if len(deliverables) != 1 or safe_path(root, deliverables[0]) != Path(plan['path']):
@@ -565,6 +588,7 @@ def main():
     p.add_argument('--policy-dsl-root', type=Path, help='Trusted checkout matching policy-dsl.lock.json; required only for DSL contracts')
     p.add_argument('--deliverable', action='append', default=[])
     p.add_argument('--complete', action='store_true', help='Require explicit result, trusted base and preparation receipt before completion')
+    p.add_argument('--managed-copies', type=Path, help='Independently trusted path-to-SHA256 inventory of external .governance/docs copies; never read from candidate report metadata')
     p.add_argument('--prepared-plan', type=Path, help='Saved successful --prepare JSON result; evidence only, not authority')
     p.add_argument('--prepare', action='store_true', help='Read-only mandatory pre-generation placement check')
     p.add_argument('--kind', choices=sorted(set(POLICY['kinds']) | set(POLICY['compact']['directories'])))
@@ -572,6 +596,14 @@ def main():
     p.add_argument('--id', dest='slug')
     p.add_argument('--scope', choices=POLICY['delivery_scopes'])
     args = p.parse_args()
+    managed_copies = None
+    if args.managed_copies:
+        if args.fleet:
+            p.error("--managed-copies requires a single --root")
+        try:
+            managed_copies = json.loads(args.managed_copies.read_text())
+        except (OSError, ValueError):
+            p.error("Cannot decode trusted managed-copy inventory")
     if args.namespace and not args.fleet:
         p.error('--namespace requires --fleet')
     if args.complete:
@@ -579,7 +611,7 @@ def main():
             p.error('--complete requires --root, --base, one --deliverable and --prepared-plan')
         try:
             prepared = json.loads(args.prepared_plan.read_text())
-            result = complete_delivery(args.root, args.standard_revision, args.deliverable, args.base, prepared, args.policy_dsl_root)
+            result = complete_delivery(args.root, args.standard_revision, args.deliverable, args.base, prepared, args.policy_dsl_root, managed_copies)
         except (OSError, ValueError, TypeError):
             result = {'ok': False, 'findings': [{'code': 'DOCS_COMPLETION', 'message': 'Cannot decode preparation receipt'}]}
     elif args.prepared_plan:
@@ -587,7 +619,7 @@ def main():
     elif args.prepare:
         if args.fleet or args.base or len(args.deliverable) != 1 or not all([args.kind, args.slug, args.scope]):
             p.error('--prepare requires --root, --kind, --id, --scope and exactly one --deliverable, without --base')
-        result = prepare_delivery(args.root, args.standard_revision, args.kind, args.slug, args.scope, args.deliverable[0], args.format == 'v2', args.policy_dsl_root)
+        result = prepare_delivery(args.root, args.standard_revision, args.kind, args.slug, args.scope, args.deliverable[0], args.format == 'v2', args.policy_dsl_root, managed_copies)
     elif args.kind or args.slug or args.scope or args.format:
         p.error('--kind, --id and --scope require --prepare')
     elif args.fleet:
@@ -598,7 +630,7 @@ def main():
         except ValueError as error:
             p.error(str(error))
     else:
-        result = check(args.root, args.standard_revision, args.deliverable, base=args.base, policy_dsl_root=args.policy_dsl_root)
+        result = check(args.root, args.standard_revision, args.deliverable, base=args.base, policy_dsl_root=args.policy_dsl_root, managed_copies=managed_copies)
     print(json.dumps(result, indent=2))
     return 0 if result['ok'] else 1
 

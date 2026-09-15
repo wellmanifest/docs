@@ -1,0 +1,76 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-013",
+  "summary": "Keep independently verified standard copies outside consumer document discovery",
+  "workstream": "integration",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P2",
+    "origin": "requested"
+  },
+  "allowedPaths": [
+    "project/ticket-013/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "docs/standard/check.py",
+    "docs/standard/tests/test_check.py",
+    "docs/standard/POLICY.md"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "aa92136b4e94f48355c39fb206286aba024c6aa4",
+    "targetBranch": "main",
+    "outcome": "Keep independently verified standard copies outside consumer document discovery",
+    "nonGoals": [
+      "No global adoption, deployment or protected publication claims."
+    ],
+    "complexity": "M",
+    "estimatedMinutes": 90,
+    "budgets": {
+      "maxImplementationFiles": 7,
+      "maxAffectedComponents": 2,
+      "maxPublicInterfaceChanges": 2,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Docs owns placement; Report verifies actual local artifacts without claiming remote publication or authority.",
+      "components": [
+        {
+          "name": "report-completion",
+          "paths": [
+            "docs/standard/check.py",
+            "docs/standard/tests/test_check.py",
+            "docs/standard/POLICY.md"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert candidate change before consumer adoption."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python -m unittest discover -s docs/standard/tests",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "docs/standard/POLICY.md"
+      }
+    ]
+  }
+}

@@ -73,6 +73,54 @@ class Conformance(unittest.TestCase):
     def complete(self, base, prepared, paths=None):
         return checker.complete_delivery(self.root, REV, [self.name] if paths is None else paths, base, prepared)
 
+    def managed_copy(self):
+        import hashlib
+        name = '.governance/docs/UPSTREAM.md'
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((self.root / self.name).read_bytes())
+        self.git('add', name)
+        return {name: hashlib.sha256(path.read_bytes()).hexdigest()}
+
+    def test_external_copy_requires_explicit_verified_inventory(self):
+        copies = self.managed_copy()
+        self.assertIn('DOCS_LOCATION', self.codes())
+        result = self.check(managed_copies=copies)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['managed_copies_verified'][0]['path'], next(iter(copies)))
+        (self.root / next(iter(copies))).write_text('tampered')
+        self.assertIn('DOCS_MANAGED_COPY', self.codes(managed_copies=copies))
+
+    def test_managed_copy_cannot_hide_deliverables_or_product_documents(self):
+        copies = self.managed_copy()
+        self.assertIn('DOCS_MANAGED_COPY', self.codes(managed_copies=copies, deliverables=list(copies)))
+        self.assertIn('DOCS_MANAGED_COPY', self.codes(managed_copies={self.name: 'a' * 64}))
+        self.assertIn('DOCS_MANAGED_COPY', self.codes(managed_copies=[]))
+
+    def test_managed_copy_rejects_untracked_symlink_and_unsafe_path(self):
+        copies = self.managed_copy()
+        name = next(iter(copies))
+        self.git('rm', '--cached', name)
+        self.assertIn('DOCS_MANAGED_COPY', self.codes(managed_copies=copies))
+        path = self.root / name
+        path.unlink()
+        path.symlink_to(self.root / self.name)
+        self.git('add', name)
+        self.assertIn('DOCS_MANAGED_COPY', self.codes(managed_copies=copies))
+        for invalid in ('/etc/passwd', '.governance/docs/../../report.md'):
+            self.assertIn('DOCS_MANAGED_COPY', self.codes(managed_copies={invalid: 'a' * 64}))
+
+    def test_completion_binds_managed_copy_inventory(self):
+        base, _ = self.completion_fixture()
+        copies = self.managed_copy()
+        plan = checker.prepare_delivery(self.root, REV, self.meta['kind'], self.meta['id'],
+                                        'repository', self.name, managed_copies=copies)
+        self.assertTrue(plan['ok'], plan)
+        good = checker.complete_delivery(self.root, REV, [self.name], base, plan, managed_copies=copies)
+        self.assertTrue(good['ok'], good)
+        bad = checker.complete_delivery(self.root, REV, [self.name], base, plan)
+        self.assertFalse(bad['ok'])
+
     def test_completion_requires_explicit_result_and_preflight(self):
         base, prepared = self.completion_fixture()
         self.assertFalse(self.complete(base, prepared, [])['ok'])
