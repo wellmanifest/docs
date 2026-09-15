@@ -29,6 +29,13 @@ def _error(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
 
 
+def _unique_strings(value: object, maximum: int) -> bool:
+    """Check an untrusted list without hashing arbitrary attacker objects."""
+    return (isinstance(value, list) and len(value) <= maximum
+            and all(isinstance(item, str) for item in value)
+            and len(set(value)) == len(value))
+
+
 def validate_receipt(receipt: object, previous: object | None = None) -> list[dict[str, str]]:
     """Return deterministic findings; this function grants no deployment authority."""
     findings: list[dict[str, str]] = []
@@ -53,8 +60,8 @@ def validate_receipt(receipt: object, previous: object | None = None) -> list[di
         require(isinstance(receipt.get(key), str) and pattern.fullmatch(receipt[key] or "") is not None,
                 "DOCS_READINESS_DIGEST", f"{key} must be a lowercase immutable digest")
     roots = receipt.get("covered_roots")
-    require(isinstance(roots, list) and 1 <= len(roots) <= 128 and len(set(roots)) == len(roots)
-            and all(isinstance(item, str) and ROOT.fullmatch(item) is not None and ".." not in item.split("/")
+    require(_unique_strings(roots, 128) and 1 <= len(roots)  # type: ignore[arg-type]
+            and all(ROOT.fullmatch(item) is not None and ".." not in item.split("/")
                     for item in roots),
             "DOCS_READINESS_ROOTS", "covered_roots must be unique, relative, non-empty paths")
     phase = receipt.get("phase")
@@ -69,8 +76,8 @@ def validate_receipt(receipt: object, previous: object | None = None) -> list[di
         evidence = {}
     for name in PHASES:
         items = evidence.get(name)
-        valid = (isinstance(items, list) and len(items) <= 64 and len(set(items)) == len(items)
-                 and all(isinstance(item, str) and 0 < len(item) <= 512
+        valid = (_unique_strings(items, 64)
+                 and all(0 < len(item) <= 512
                          and "\n" not in item and item.startswith(EVIDENCE_PREFIX) for item in items))
         require(valid, "DOCS_READINESS_EVIDENCE", f"evidence.{name} must contain safe unique references")
     if phase in PHASES and isinstance(evidence, dict):
@@ -93,9 +100,8 @@ def validate_receipt(receipt: object, previous: object | None = None) -> list[di
     require(review.get("reviewer") is None or (isinstance(review.get("reviewer"), str)
                                                 and 0 < len(review["reviewer"]) <= 200),
             "DOCS_READINESS_REVIEW", "compatibility_review.reviewer must be null or a bounded name")
-    require(isinstance(review_evidence, list) and len(review_evidence) <= 64
-            and len(set(review_evidence)) == len(review_evidence)
-            and all(isinstance(item, str) and item.startswith(EVIDENCE_PREFIX) and "\n" not in item
+    require(_unique_strings(review_evidence, 64)
+            and all(len(item) <= 512 and item.startswith(EVIDENCE_PREFIX) and "\n" not in item
                     for item in review_evidence),
             "DOCS_READINESS_REVIEW", "compatibility_review.evidence must contain safe references")
     if required is True:
@@ -126,6 +132,17 @@ def validate_receipt(receipt: object, previous: object | None = None) -> list[di
         if previous.get("standard_version") == receipt.get("standard_version") and previous.get("standard_revision") == receipt.get("standard_revision"):
             require(required is False, "DOCS_READINESS_REVIEW", "Unchanged source must not invent a compatibility review")
     return findings
+
+
+def dedup_key(receipt: object) -> tuple[object, ...]:
+    """Return the bounded observation identity used by rollout inventory code."""
+    findings = validate_receipt(receipt)
+    if findings:
+        raise ValueError("Cannot deduplicate an invalid readiness receipt")
+    value = receipt  # narrowed by validate_receipt above for the fields below
+    assert isinstance(value, dict)
+    return (value["repository"], value["standard"], value["standard_revision"],
+            tuple(value["covered_roots"]), value["base_sha"], value["head_sha"], value["phase"])
 
 
 def build_receipt(*, repository: str, standard: str, standard_version: str,

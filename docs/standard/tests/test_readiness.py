@@ -59,6 +59,25 @@ class Readiness(unittest.TestCase):
             receipt = self.receipt(covered_roots=roots)
             self.assertIn("DOCS_READINESS_ROOTS", {item["code"] for item in readiness.validate_receipt(receipt)})
 
+    def test_hostile_nested_values_fail_closed_without_type_errors(self):
+        for field, value in [
+            ("covered_roots", [{"path": "workspace"}]),
+            ("evidence", {key: ([{"ref": "receipt://x"}] if key == "configured" else []) for key in readiness.PHASES}),
+            ("compatibility_review", {"required": False, "status": "not-required", "reviewer": None, "evidence": [{"ref": "receipt://x"}]}),
+        ]:
+            receipt = self.receipt(**{field: value})
+            findings = readiness.validate_receipt(receipt)
+            self.assertTrue(findings)
+            self.assertTrue(all(isinstance(item["code"], str) for item in findings))
+
+    def test_dedup_key_is_stable_and_changes_for_a_new_observation(self):
+        first = self.receipt()
+        self.assertEqual(readiness.dedup_key(first), readiness.dedup_key(self.receipt()))
+        changed = self.receipt(head_sha="f" * 40)
+        self.assertNotEqual(readiness.dedup_key(first), readiness.dedup_key(changed))
+        changed = self.receipt(covered_roots=["workspace/autogrammar"])
+        self.assertNotEqual(readiness.dedup_key(first), readiness.dedup_key(changed))
+
     def test_same_version_source_change_requires_accepted_review(self):
         previous = self.receipt()
         current = self.receipt(standard_revision="f" * 40)

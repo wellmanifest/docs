@@ -8,7 +8,8 @@
   [results and rollout gates](docs/ANALYSIS/FLEET_COVERAGE_PILOT.md).
 - Ticket-014: adopter readiness receipt pilot;
   [contract and canaries](docs/standard/readiness.schema.json). Consumer rollout
-  remains blocked until each adopter supplies an external receipt.
+  remains blocked until each adopter supplies an external receipt; follow-up
+  hardening keeps deduplication and hostile-input handling fail-closed.
 - Consumer adoption remains separate: reconcile semcod/koru#169,
   semcod/goal#158 and semcod/taskand-glm53#20 with existing active work,
   then prove trusted preflight/final enforcement before expanding migration.
