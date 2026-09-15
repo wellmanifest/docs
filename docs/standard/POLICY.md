@@ -323,3 +323,38 @@ documentation paths, symlinks and mismatched hashes always fail. Results enumera
 or upstream publication. Preparation binds the same inventory into its plan;
 completion revalidates it. This narrow integration boundary prevents an immutable
 standard manual from being moved into the adopter's product documentation.
+
+## DOCS-012 — Receipt gotowości adoptera
+
+Receipt `wellmanifest.docs/readiness/v1` jest maszynowym, niemutowalnym
+raportem obserwacji jednego adoptera. Plik może pozostać w zewnętrznym
+magazynie receiptów; nie jest dokumentacją ani uprawnieniem. Kanoniczny
+schemat znajduje się w `standard/readiness.schema.json`, a inertny generator
+i walidator w `standard/readiness.py`.
+
+Receipt MUSI zawierać dokładnie: `repository`, `standard_version`, pełne
+`standard_revision`, digesty `policy_sha256` i `checker_sha256`, niepuste i
+unikalne względne `covered_roots`, pełne `base_sha` i `head_sha`, `observed_at`,
+`generator`, fazę oraz osobne tablice dowodów dla każdej fazy:
+`unavailable`, `unadopted`, `configured`, `deployed`, `verified`. Dowody są
+bezpiecznymi referencjami URI; przyszłe fazy pozostają puste. Receipt nie
+może zawierać ścieżek bezpośrednich, sekretów ani wildcardów.
+
+Fazy oznaczają kolejno: brak dostępnego standardu, standard dostępny lecz
+nieprzypięty, przypięcie i generator skonfigurowane, brama wdrożona oraz
+obserwowalnie zweryfikowana. Validator nie awansuje fazy na podstawie samego
+pliku; konsument dołącza niezależne dowody. Przy porównaniu z poprzednim
+receiptem faza i `covered_roots` nie mogą się cofać ani zmieniać w miejscu.
+
+Jeżeli `standard_version` pozostaje taka sama, ale `standard_revision` się
+zmienia, `compatibility_review` MUSI mieć status `accepted`, nazwę reviewera
+i odrębny dowód. Nie wolno wykonywać automatycznej aktualizacji tylko dlatego,
+że wersja semantyczna się nie zmieniła. Zmiana wersji również wymaga zwykłego
+procesu adopcji; receipt nie zastępuje przeglądu, CI ani chronionej publikacji.
+
+Generator jest czystą funkcją danych i powinien być idempotentny dla tych samych
+wejść. Minimalne canary CI MUSZĄ odrzucać: brak fazy/evidence, przyszłe dowody,
+niebezpieczny lub powtórzony root, cofnięcie fazy, zmianę rootów oraz zmianę
+źródła tej samej wersji bez zaakceptowanego review. Lista faz służy do raportu
+gotowości; `verified` nie oznacza zgody na merge, deploy, czyszczenie ani dostęp
+do sekretów.

@@ -9,6 +9,7 @@
 - [Uzasadnienie i pomiar](ANALYSIS/COMPACT_DOCUMENTATION.md) — rozmiary przykładów, decyzje i granice migracji.
 
 - [Wytyczne normatywne](standard/POLICY.md)
+- [Receipt gotowości adoptera](standard/readiness.schema.json) — rozdziela dostępność, konfigurację, wdrożenie i weryfikację.
 - [Katalog maszynowy](standard/policy.json)
 - [Informacja](standard/templates/information.md)
 - [Analiza](standard/templates/analysis.md)
