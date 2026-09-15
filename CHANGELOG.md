@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Maszynowy receipt gotowości adoptera rozdziela fazy od `unavailable` do `verified` i wymaga przeglądu kompatybilności przy zmianie źródła tej samej wersji — [kontrakt](docs/standard/readiness.schema.json).
+
 - Jawny audyt wielu organizacji i katalogów, bez ukrywania kopii i luk pokrycia — [pilotaż](docs/ANALYSIS/FLEET_COVERAGE_PILOT.md).
 
 - Opcjonalne kontrakty [FEATURE/BUGFIX](docs/FEATURE/CHANGE_CONTRACTS.md) w istniejącym Policy DSL; kontrola kryteriów, plików testów i przypiętego parsera.

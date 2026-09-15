@@ -1,0 +1,87 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-014",
+  "summary": "Standardize declared configured deployed verified documentation readiness",
+  "workstream": "integration",
+  "classification": {
+    "kind": "FEATURE",
+    "priority": "P2",
+    "origin": "requested"
+  },
+  "allowedPaths": [
+    "project/ticket-014/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "VERSION",
+    "CHANGELOG.md",
+    "docs/README.md",
+    "docs/standard/POLICY.md",
+    "docs/standard/policy.json",
+    "docs/standard/readiness.schema.json",
+    "docs/standard/readiness.py",
+    "docs/standard/tests/test_readiness.py"
+  ],
+  "forbiddenPaths": ["project/ticket-*/user-*.md"],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "6f475fb223e7a259d514b5483fb0d62f0e80a46e",
+    "targetBranch": "main",
+    "outcome": "Publish a machine-readable adopter readiness receipt with bounded canary validation",
+    "nonGoals": [
+      "No consumer checkout changes or automatic standard pin updates",
+      "No deployment, merge, secret access or publication authority"
+    ],
+    "complexity": "M",
+    "estimatedMinutes": 90,
+    "budgets": {
+      "maxImplementationFiles": 9,
+      "maxAffectedComponents": 2,
+      "maxPublicInterfaceChanges": 1,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Keep readiness as an inert, strict receipt contract; leave deployment evidence and authority with the protected consumer process.",
+      "components": [
+        {
+          "name": "readiness-contract",
+          "paths": [
+            "docs/standard/readiness.schema.json",
+            "docs/standard/readiness.py",
+            "docs/standard/tests/test_readiness.py"
+          ]
+        },
+        {
+          "name": "standard-guidance",
+          "paths": [
+            "docs/standard/POLICY.md",
+            "docs/standard/policy.json",
+            "docs/README.md",
+            "CHANGELOG.md",
+            "VERSION"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": ["wellmanifest.docs/readiness/v1 receipt and inert CLI"],
+      "dataChanges": ["Phase-separated readiness evidence with exact root and digest bindings"],
+      "ui": {"impact": "none", "states": [], "evidence": []},
+      "rollback": "Restore the preceding immutable docs standard pin; preserve receipts as historical evidence."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "python -m unittest discover -s docs/standard/tests",
+          "python3 -m py_compile docs/standard/readiness.py docs/standard/tests/test_readiness.py",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "docs/standard/readiness.schema.json"
+      }
+    ]
+  }
+}
