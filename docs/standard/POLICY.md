@@ -363,3 +363,66 @@ covered_roots, base_sha, head_sha, phase)`, a nowy HEAD, root lub faza tworzy
 nową obserwację. Promocja do kolejnego adoptera wymaga osobnego receiptu i
 niezależnej bramy CI; brak, duplikat lub rozbieżność receiptów zatrzymuje
 rollout, nie usuwa danych i kieruje sprawę do review człowieka.
+
+## DOCS-013 — Algorytmiczna deduplikacja, spójność i drift dokumentacji (semcod/algocode)
+
+Dokumentacja techniczna w profilu `wellmanifest/docs` podlega rygorowi
+algorytmicznej unikalności, braku redundancji oraz spójności ze strukturą
+kodu źródłowego repozytorium.
+
+### Unikalność tożsamości i nagłówków (DOCS_DUPLICATE_ID, DOCS_DUPLICATE_TITLE)
+
+Każdy zarządzany dokument w profilu `docs/` MUSI posiadać unikalny
+identyfikator (`id`) oraz unikalny tytuł semantyczny (`title`) w obrębie
+repozytorium i sprawdzanego zbioru. Wykrycie dwóch dokumentów o identycznym
+lub zbieżnym tytule (`DOCS_DUPLICATE_TITLE`) oznacza kolizję dokumentacyjną,
+którą należy rozwiązać poprzez konsolidację w jeden dokument kanoniczny lub
+uściślenie zakresu i tytułów.
+
+### Algorytmiczna detekcja klonów sekcji (semcod/algocode)
+
+Wykrywanie powielonych fragmentów prozy technicznej, powtórzonych
+paragrafów oraz zduplikowanych bloków kodu źródłowego (`fenced code blocks`)
+opiera się na algorytmicznej detekcji klonów (Type-1: identyczny tekst/hash,
+Type-2: znormalizowana struktura syntaktyczna i tokeny).
+
+Narzędziem referencyjnym dla wielojęzycznej analizy klonów i normalizacji
+jest pakiet `semcod/algocode` (funkcja `algocode.scan_duplicates` oraz
+metody klasy `CodeAnalysisEngine`). W przypadku braku instalacji `algocode`,
+brama `check.py` wykonuje wbudowaną kontrolę hashy treści nietrywialnych
+sekcji. Wykrycie zduplikowanej zawartości sekcji generuje ostrzeżenie
+`DOCS_DUPLICATE_SECTION` lub błąd przy weryfikacji rygorystycznej
+(`--check-duplicates`). Zamiast kopiować treść pomiędzy plikami Markdown,
+adopter MUSI wydzielić wspólny dokument referencyjny w `docs/information/`
+bądź `docs/INFORMATION/` i podlinkować go w indeksie.
+
+### Wykrywanie dryfu dokumentacji względem kodu (AST Drift Detection)
+
+Dokumenty techniczne, pliki analiz (`docs/analysis/`), specyfikacje
+procedur oraz opisy architektoniczne powołujące się na symbole źródłowe
+(klasy, metody, funkcje, interfejsy) podlegają weryfikacji dryfu
+(drift detection). Analizator składniowy `algocode.inspect_ast` weryfikuje,
+czy referencjonowane symbole rzeczywiście istnieją w bieżącym drzewie AST
+repozytorium. Odwołanie do usuniętego, przemianowanego lub nieistniejącego
+symbolu stanowi dryf dokumentacji i blokuje zakończenie zadania refaktoryzacji.
+
+### Trójstronna komunikacja oparta o DSL (LLM ↔ Human ↔ Algorytmy)
+
+Integracja standardu dokumentacji z komunikacją opartą na DSL realizuje
+zamknięty podział odpowiedzialności:
+
+1. **Algorytmy (`algocode`, `check.py`)**: Generują niezmienne, deterministyczne
+   fakty — odciski SHA-256 bloków, wykryte klony kodu i tekstu, wskaźniki
+   pokrycia oraz brakujące węzły AST. Fakty te są emitowane w ustrukturyzowanych
+   kontraktach DSL/JSON (np. `wellmanifest.docs/verification/v1`).
+2. **LLM (Agenci sztucznej inteligencji)**: Przetwarzają wygenerowane fakty DSL,
+   proponują bezstratną konsolidację zduplikowanych dokumentów, aktualizują
+   indeksy oraz refaktoryzują opisy bez halucynacji o stanie kodu.
+3. **Człowiek (Właściciel / Reviewer)**: Definiuje intencję biznesową,
+   dokonuje przeglądu merytorycznego (human-in-the-loop) i autoryzuje
+   kanoniczną architekturę dokumentacji oraz decyzje projektowe.
+
+Automatyzacja CI/OneDev egzekwuje te reguły w trybie fail-closed: brak
+zgodności deklaracji, powielenie tytułów lub nierozwiązany dryf dokumentacji
+wstrzymuje proces publikacji przed chronionym merge.
+

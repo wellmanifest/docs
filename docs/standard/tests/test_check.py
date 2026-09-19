@@ -474,6 +474,9 @@ class CompactConformance(unittest.TestCase):
     def codes(self, **kwargs):
         return self.fixture.codes(**kwargs)
 
+    def check(self, **kwargs):
+        return self.fixture.check(**kwargs)
+
     def base(self):
         self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.org',
                  'commit', '-qm', 'baseline')
@@ -685,6 +688,52 @@ class CompactConformance(unittest.TestCase):
         (self.root / self.name).write_text(template)
         self.assertEqual(self.codes(), set())
 
+    def test_duplicate_document_title_is_rejected(self):
+        meta2 = dict(self.meta)
+        meta2['id'] = 'publication-second'
+        compact = meta2.get('schema') == checker.POLICY['compact']['document_schema']
+        sections = checker.POLICY['compact']['sections'] if compact else checker.POLICY['kinds'][meta2['kind']]['sections']
+        name2 = 'docs/FEATURE/PUBLICATION_SECOND.md' if compact else 'docs/refactoring/publication-second.md'
+        p2 = self.root / name2
+        p2.parent.mkdir(parents=True, exist_ok=True)
+        body = '# Plan\n'
+        for section in sections:
+            body += '\n<!-- docs:section ' + section + ' -->\n## ' + section + '\n\nAnother unique finding.\n'
+        p2.write_text('---\n' + json.dumps(meta2) + '\n---\n' + body)
+        index_text = (self.root / 'docs/README.md').read_text()
+        (self.root / 'docs/README.md').write_text(index_text + f'\n[Plan 2]({p2.relative_to(self.root / "docs").as_posix()})\n')
+        self.git('add', '.')
+        self.assertIn('DOCS_DUPLICATE_TITLE', self.codes())
+
+    def test_duplicate_section_content_emits_warning_or_finding(self):
+        meta2 = dict(self.meta)
+        meta2['id'] = 'publication-second'
+        meta2['title'] = 'Second unique publication'
+        compact = meta2.get('schema') == checker.POLICY['compact']['document_schema']
+        sections = checker.POLICY['compact']['sections'] if compact else checker.POLICY['kinds'][meta2['kind']]['sections']
+        name2 = 'docs/FEATURE/PUBLICATION_SECOND.md' if compact else 'docs/refactoring/publication-second.md'
+        p2 = self.root / name2
+        p2.parent.mkdir(parents=True, exist_ok=True)
+        long_content = 'This is a substantial identical section text that describes detailed architectural findings and scope bounds across multiple paragraphs to trigger deduplication check.'
+        body1 = '# Plan\n'
+        for section in sections:
+            body1 += '\n<!-- docs:section ' + section + ' -->\n## ' + section + '\n\n' + long_content + '\n'
+        (self.root / self.name).write_text('---\n' + json.dumps(self.meta) + '\n---\n' + body1)
+        body2 = '# Plan 2\n'
+        for section in sections:
+            body2 += '\n<!-- docs:section ' + section + ' -->\n## ' + section + '\n\n' + long_content + '\n'
+        p2.write_text('---\n' + json.dumps(meta2) + '\n---\n' + body2)
+        index_text = (self.root / 'docs/README.md').read_text()
+        (self.root / 'docs/README.md').write_text(index_text + f'\n[Plan 2]({p2.relative_to(self.root / "docs").as_posix()})\n')
+        self.git('add', '.')
+        res = self.check()
+        warning_codes = {w['code'] for w in res.get('warnings', [])}
+        self.assertIn('DOCS_DUPLICATE_SECTION', warning_codes)
+        res_strict = self.check(check_duplicates=True)
+        finding_codes = {f['code'] for f in res_strict.get('findings', [])}
+        self.assertIn('DOCS_DUPLICATE_SECTION', finding_codes)
+
 
 if __name__ == '__main__':
     unittest.main()
+
