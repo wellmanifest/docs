@@ -2,8 +2,8 @@
 
 - **ID**: ticket-018
 - **Owner**: agent:gemini
-- **Status**: IN_PROGRESS
-- **Workflow state**: EDIT
+- **Status**: DONE
+- **Workflow state**: DONE
 - **Created**: 2026-09-19
 - **Authorization**: SESSION_EXECUTION_AUTHORIZATION
 
