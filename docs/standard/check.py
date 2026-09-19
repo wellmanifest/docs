@@ -25,6 +25,13 @@ REPO = re.compile(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
 MARKER = re.compile(r'<!-- docs:section ([a-z_]+) -->')
 PLACEHOLDER = re.compile(r'\{\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\}')
 
+try:
+    import algocode
+    HAS_ALGOCODE = True
+except ImportError:
+    HAS_ALGOCODE = False
+
+
 
 def origin(root):
     if not Path(root).is_dir():
@@ -277,7 +284,7 @@ def check_changelog(root, files, fail):
         # should link whole documents to avoid fragile heading fragments.
 
 
-def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_root=None, managed_copies=None):
+def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_root=None, managed_copies=None, check_duplicates=False):
     root = Path(root).resolve()
     findings, warnings = [], []
     def fail(code, path, message):
@@ -372,6 +379,8 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
             selected.discard(name)
             verified_copies.append({'path': name, 'sha256': digest})
     ids = set()
+    titles = {}
+    section_hashes = {}
     for name in sorted(selected):
         if safe_path(root, name) is None:
             fail('DOCS_LOCATION', name, 'Symlink or escaped path')
@@ -410,6 +419,12 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
             continue
         if meta['id'] in ids:
             fail('DOCS_DUPLICATE_ID', name, 'One canonical owner and one document for this id')
+        norm_title = re.sub(r'\s+', ' ', str(meta.get('title', '')).strip().lower())
+        if norm_title:
+            if norm_title in titles:
+                fail('DOCS_DUPLICATE_TITLE', name, f"Duplicate document title '{meta['title']}' already declared in {titles[norm_title]}")
+            else:
+                titles[norm_title] = name
         if compact:
             try:
                 CONTRACT.check(body, meta, root, files, safe_path, policy_dsl_root)
@@ -455,6 +470,19 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
             content = re.sub(r'^\s*#+[^\n]*$', '', content, flags=re.M).strip()
             if not content:
                 fail('DOCS_EMPTY_SECTION', name, match.group(1))
+            else:
+                norm_sec = re.sub(r'\s+', ' ', content).strip()
+                if len(norm_sec) >= 120:
+                    sec_hash = hashlib.sha256(norm_sec.encode('utf-8')).hexdigest()
+                    if sec_hash in section_hashes:
+                        prev_doc, prev_sec = section_hashes[sec_hash]
+                        msg = f"Section '{match.group(1)}' duplicates section '{prev_sec}' in {prev_doc}"
+                        if check_duplicates:
+                            fail('DOCS_DUPLICATE_SECTION', name, msg)
+                        else:
+                            warnings.append({'code': 'DOCS_DUPLICATE_SECTION', 'path': name, 'message': msg})
+                    else:
+                        section_hashes[sec_hash] = (name, match.group(1))
         if safe_path(root, index) is None or index not in files or not (root / index).is_file():
             fail('DOCS_INDEX', index, 'Tracked documentation index required')
         else:
@@ -463,6 +491,20 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
             if not re.search(r'\]\(' + re.escape(relative_link) + r'(?:#[^)]*)?\)', index_text):
                 fail('DOCS_INDEX', name, 'Link the canonical document from ' + index)
     check_changelog(root, files, fail)
+    if check_duplicates and HAS_ALGOCODE:
+        try:
+            docs_dir = root / 'docs'
+            if docs_dir.is_dir():
+                clones = algocode.scan_duplicates(docs_dir, extensions=['.md'])
+                for clone in clones:
+                    msg = f"Clone detected with {clone.get('file_b')} ({clone.get('line_count')} lines, type {clone.get('clone_type')})"
+                    warnings.append({
+                        'code': 'DOCS_CLONE_BLOCK',
+                        'path': clone.get('file_a', 'docs'),
+                        'message': msg
+                    })
+        except Exception:
+            pass
     return {'ok': not findings, 'repository': repository, 'documents_checked': len(selected),
             'scope': POLICY['adoption_scope'], 'managed_copies_verified': verified_copies, 'findings': findings, 'warnings': warnings}
 
@@ -595,6 +637,7 @@ def main():
     p.add_argument('--format', choices=['v1', 'v2'], default=None, help='Preparation format; v1 compatibility or compact v2')
     p.add_argument('--id', dest='slug')
     p.add_argument('--scope', choices=POLICY['delivery_scopes'])
+    p.add_argument('--check-duplicates', action='store_true', help='Enforce strict duplicate and clone detection across documents')
     args = p.parse_args()
     managed_copies = None
     if args.managed_copies:
@@ -630,7 +673,7 @@ def main():
         except ValueError as error:
             p.error(str(error))
     else:
-        result = check(args.root, args.standard_revision, args.deliverable, base=args.base, policy_dsl_root=args.policy_dsl_root, managed_copies=managed_copies)
+        result = check(args.root, args.standard_revision, args.deliverable, base=args.base, policy_dsl_root=args.policy_dsl_root, managed_copies=managed_copies, check_duplicates=args.check_duplicates)
     print(json.dumps(result, indent=2))
     return 0 if result['ok'] else 1
 
