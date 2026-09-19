@@ -4,6 +4,9 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
 import test_check
 
 checker = test_check.checker

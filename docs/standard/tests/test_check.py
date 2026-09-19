@@ -91,6 +91,19 @@ class Conformance(unittest.TestCase):
         (self.root / next(iter(copies))).write_text('tampered')
         self.assertIn('DOCS_MANAGED_COPY', self.codes(managed_copies=copies))
 
+    def test_managed_copy_auto_discovered_from_governance_file(self):
+        copies = self.managed_copy()
+        self.assertIn('DOCS_LOCATION', self.codes())
+        gov_file = self.root / '.governance/managed-copies.json'
+        gov_file.write_text(json.dumps(copies))
+        self.git('add', '.governance/managed-copies.json')
+        result = self.check()
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['managed_copies_verified'][0]['path'], next(iter(copies)))
+        gov_file.write_text('invalid json content {')
+        self.assertIn('DOCS_MANAGED_COPY', self.codes())
+
+
     def test_managed_copy_cannot_hide_deliverables_or_product_documents(self):
         copies = self.managed_copy()
         self.assertIn('DOCS_MANAGED_COPY', self.codes(managed_copies=copies, deliverables=list(copies)))
@@ -733,7 +746,41 @@ class CompactConformance(unittest.TestCase):
         finding_codes = {f['code'] for f in res_strict.get('findings', [])}
         self.assertIn('DOCS_DUPLICATE_SECTION', finding_codes)
 
+    def test_metadata_diagnostics_report_specific_reasons(self):
+        bad_meta = dict(self.meta)
+        del bad_meta['title']
+        (self.root / self.name).write_text('---\n' + json.dumps(bad_meta) + '\n---\n# Title\n')
+        self.git('add', '.')
+        res = self.check()
+        finding = next(f for f in res['findings'] if f['code'] == 'DOCS_METADATA')
+        self.assertIn("Missing required metadata fields: title", finding['message'])
+
+        bad_meta = dict(self.meta)
+        bad_meta['unknown_custom_prop'] = 123
+        (self.root / self.name).write_text('---\n' + json.dumps(bad_meta) + '\n---\n# Title\n')
+        self.git('add', '.')
+        res = self.check()
+        finding = next(f for f in res['findings'] if f['code'] == 'DOCS_METADATA')
+        self.assertIn("Unexpected metadata fields: unknown_custom_prop", finding['message'])
+
+        bad_meta = dict(self.meta)
+        bad_meta['version'] = 0
+        (self.root / self.name).write_text('---\n' + json.dumps(bad_meta) + '\n---\n# Title\n')
+        self.git('add', '.')
+        res = self.check()
+        finding = next(f for f in res['findings'] if f['code'] == 'DOCS_METADATA')
+        self.assertIn("Field 'version' must be a positive integer", finding['message'])
+
+        bad_meta = dict(self.meta)
+        bad_meta['evidence'] = ['tests/test_foo.py']
+        (self.root / self.name).write_text('---\n' + json.dumps(bad_meta) + '\n---\n# Title\n')
+        self.git('add', '.')
+        res = self.check()
+        finding = next(f for f in res['findings'] if f['code'] == 'DOCS_METADATA')
+        self.assertIn("Field 'evidence' reference 'tests/test_foo.py' must start with repo://", finding['message'])
+
 
 if __name__ == '__main__':
     unittest.main()
+
 
