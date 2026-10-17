@@ -319,6 +319,11 @@ def check_changelog(root, files, fail):
         # should link whole documents to avoid fragile heading fragments.
 
 
+def _git_show_base(root, base, name):
+    return subprocess.run(['git', 'show', base + ':' + name], cwd=root,
+                          capture_output=True, text=True, check=False)
+
+
 def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_root=None, managed_copies=None, check_duplicates=False):
     root = Path(root).resolve()
     findings, warnings = [], []
@@ -371,8 +376,7 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
             for name in set(changes.stdout.decode().split('\0')) & files:
                 if not name.lower().endswith('.md'):
                     continue
-                old = subprocess.run(['git', 'show', base + ':' + name], cwd=root,
-                                     capture_output=True, text=True, check=False)
+                old = _git_show_base(root, base, name)
                 try:
                     previous, _ = metadata(old.stdout)
                     was_managed = previous.get('schema') in document_schemas()
@@ -438,8 +442,7 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
         if PLACEHOLDER.search(text):
             fail('DOCS_PLACEHOLDER', name, 'Replace template placeholders with actual findings or a reasoned not-applicable statement')
         if base:
-            old = subprocess.run(['git', 'show', base + ':' + name], cwd=root,
-                                 capture_output=True, text=True, check=False)
+            old = _git_show_base(root, base, name)
             if old.returncode == 0 and old.stdout != text:
                 try:
                     previous, _ = metadata(old.stdout)
@@ -515,8 +518,7 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
         # Preserve historical metadata during audits. New or changed results
         # must state scope explicitly; deleting scope cannot restore an exemption.
         if scope is None and base:
-            previous_text = subprocess.run(['git', 'show', base + ':' + name], cwd=root,
-                                           capture_output=True, text=True, check=False)
+            previous_text = _git_show_base(root, base, name)
             if previous_text.returncode or previous_text.stdout != text:
                 fail('DOCS_SCOPE', name, 'New or changed deliverables require explicit repository or organization scope')
         if not compact and not meta['created'] <= meta['updated'] <= meta['review_after']:
@@ -613,6 +615,14 @@ def complete_delivery(root, revision, deliverables, base, prepared, policy_dsl_r
     return result
 
 
+def _observe_checkout(path):
+    head = subprocess.run(['git', 'rev-parse', '--verify', 'HEAD^{commit}'],
+                          cwd=path, capture_output=True, text=True, check=False)
+    status = subprocess.run(['git', '--no-optional-locks', 'status', '--porcelain', '--untracked-files=normal'],
+                            cwd=path, capture_output=True, text=True, check=False)
+    return head, status
+
+
 def check_fleet(roots, revision, namespaces=None, policy_dsl_root=None, check_duplicates=False):
     """Audit every selected checkout, including divergent copies; never fetch."""
     if not SHA.fullmatch(revision):
@@ -663,10 +673,7 @@ def check_fleet(roots, revision, namespaces=None, policy_dsl_root=None, check_du
             except (OSError, ValueError, UnicodeError):
                 report = {'ok': False, 'repository': repository,
                           'findings': [{'code': 'DOCS_CHECKOUT_READ'}], 'warnings': []}
-            head = subprocess.run(['git', 'rev-parse', '--verify', 'HEAD^{commit}'],
-                                  cwd=path, capture_output=True, text=True, check=False)
-            status = subprocess.run(['git', '--no-optional-locks', 'status', '--porcelain', '--untracked-files=normal'],
-                                    cwd=path, capture_output=True, text=True, check=False)
+            head, status = _observe_checkout(path)
             head_sha = head.stdout.strip() if head.returncode == 0 else None
             if head_sha is None or status.returncode:
                 findings.append({'code': 'DOCS_FLEET_OBSERVATION', 'path': str(path)})

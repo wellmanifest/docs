@@ -1,0 +1,72 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-020",
+  "summary": "Extract subprocess helpers from loops in docs standard check",
+  "workstream": "integration",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "project/ticket-020/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "docs/standard/check.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "19efafbeb18923cfd51cc69bd519330488500137",
+    "targetBranch": "main",
+    "outcome": "Extract _git_show_base and _observe_checkout helpers outside loops in docs/standard/check.py and align .governance/standard-adoption.json.",
+    "nonGoals": [
+      "No breaking CLI or schema changes"
+    ],
+    "complexity": "S",
+    "estimatedMinutes": 15,
+    "budgets": {
+      "maxImplementationFiles": 1,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Move git show and git rev-parse/status subprocess invocations into module-level helper functions outside loops in docs/standard/check.py.",
+      "components": [
+        {
+          "name": "docs-standard-check",
+          "paths": [
+            "docs/standard/check.py"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert helper extraction in docs/standard/check.py."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python3 -m unittest discover -s docs/standard/tests",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "All tests, standard_pack_check, and governance checks pass with 0 findings."
+      }
+    ]
+  }
+}
