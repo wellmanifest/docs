@@ -1,0 +1,82 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-021",
+  "summary": "Admit explicitly trusted published provenance for legacy redirects introduced after the unchanged audit base",
+  "workstream": "integration",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-021/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "VERSION",
+    "docs/standard/POLICY.md",
+    "docs/standard/check.py",
+    "docs/standard/tests/test_check.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "f4cb34926d7369d74b0a1fe09e896a35b72c016c",
+    "targetBranch": "main",
+    "outcome": "An explicit independently configured secondary provenance revision may prove an already published legacy URL existed after the full audit base, while default redirect validation stays strict.",
+    "nonGoals": [
+      "No default relaxation of legacy path provenance.",
+      "No audit base reduction, managed-consumer edit, history rewrite, hardware operation, self approval or merge bypass.",
+      "Consumer rollout and pin update require independently published upstream source."
+    ],
+    "complexity": "M",
+    "estimatedMinutes": 45,
+    "budgets": {
+      "maxImplementationFiles": 4,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 1,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Keep --base as complete audit range. Add a separately trusted immutable redirect provenance input; verify commit type, base ancestry, candidate ancestry and old-path existence without redirect chaining. It must come from protected caller configuration, never untrusted document metadata or inferred checkout origin refs. Final design requires independent policy review.",
+      "components": [
+        {
+          "name": "Docs provenance checker",
+          "paths": [
+            "docs/standard/check.py",
+            "docs/standard/tests/test_check.py",
+            "docs/standard/POLICY.md",
+            "VERSION"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [
+        "One optional explicit trusted provenance revision input; existing callers retain fail-closed behavior."
+      ],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert upstream material commit and leave consumers pinned to their existing published standard."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python3 -m unittest discover -s docs/standard/tests",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "All existing tests and negative canaries: new/unproven path, malformed revision, unrelated/later provenance, untracked or unsafe target, redirect chain, missing index and version downgrade remain rejected."
+      }
+    ]
+  }
+}

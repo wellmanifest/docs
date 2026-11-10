@@ -218,7 +218,61 @@ def document_schemas():
     return (POLICY['document_schema'], POLICY['compact']['document_schema'], POLICY['redirect_schema'])
 
 
-def check_redirect(root, repository, name, meta, body, files, base, fail):
+def redirect_provenance(root, base, revision, fail):
+    """Validate a protected caller's immutable anchor without changing audit base."""
+    valid = isinstance(revision, str) and SHA.fullmatch(revision) is not None
+    valid = valid and isinstance(base, str) and SHA.fullmatch(base) is not None
+    if valid:
+        for commit in (base, revision):
+            result = subprocess.run(['git', 'cat-file', '-t', commit], cwd=root,
+                                    capture_output=True, text=True, check=False)
+            if result.returncode or result.stdout.strip() != 'commit':
+                valid = False
+                break
+    if valid:
+        for ancestor, descendant in ((base, revision), (revision, 'HEAD')):
+            result = subprocess.run(['git', 'merge-base', '--is-ancestor', ancestor, descendant],
+                                    cwd=root, capture_output=True, check=False)
+            if result.returncode:
+                valid = False
+                break
+    if not valid:
+        fail('DOCS_REDIRECT_PROVENANCE', '',
+             'Require a locally available full commit SHA between the trusted base and candidate HEAD')
+        return None
+    return revision
+
+
+def redirect_source(root, revision, name):
+    """Only a regular, nonempty UTF-8 document can establish a historical URL."""
+    entry = subprocess.run(['git', 'ls-tree', '-z', revision, '--', name], cwd=root,
+                           capture_output=True, check=False)
+    if entry.returncode or len(entry.stdout.split(b'\0')) != 2:
+        return None
+    description, separator, path = entry.stdout[:-1].partition(b'\t')
+    fields = description.split()
+    if (not separator or path != name.encode('utf-8') or len(fields) != 3
+            or fields[0] not in (b'100644', b'100755') or fields[1] != b'blob'):
+        return None
+    blob = subprocess.run(['git', 'cat-file', 'blob', fields[2].decode('ascii')],
+                          cwd=root, capture_output=True, check=False)
+    if blob.returncode or b'\0' in blob.stdout:
+        return None
+    try:
+        text = blob.stdout.decode('utf-8')
+        if not text.strip():
+            return None
+        if re.match(r'\A---\r?\n', text):
+            previous, _ = metadata(text)
+            if previous.get('schema') == POLICY['redirect_schema']:
+                return None
+    except ValueError:
+        return None
+    return text
+
+
+def check_redirect(root, repository, name, meta, body, files, base, fail,
+                   redirect_provenance_revision=None):
     """A legacy path is a bounded link map, never a second canonical document."""
     fields = {'schema', 'owner', 'version', 'updated', 'targets'}
     if (set(meta) != fields or meta.get('owner') != repository
@@ -234,7 +288,19 @@ def check_redirect(root, repository, name, meta, body, files, base, fail):
         old = subprocess.run(['git', 'cat-file', '-e', base + ':' + name],
                              cwd=root, capture_output=True, check=False)
         if old.returncode:
-            fail('DOCS_REDIRECT_BASE', name, 'Only a path present in the trusted base may become a link map')
+            source = (redirect_source(root, redirect_provenance_revision, name)
+                      if redirect_provenance_revision else None)
+            if source is None:
+                fail('DOCS_REDIRECT_BASE', name, 'Path must exist in the trusted base or as a document at the trusted provenance commit')
+            else:
+                try:
+                    previous, _ = metadata(source)
+                    if (previous.get('schema') in document_schemas()
+                            and type(previous.get('version')) is int
+                            and meta['version'] <= previous['version']):
+                        fail('DOCS_VERSION', name, 'Changed document must increase its declared version')
+                except ValueError:
+                    pass
     if len(body.splitlines()) > 120 or len(body.encode('utf-8')) > 12288:
         fail('DOCS_SIZE', name, 'Legacy maps must stay below 120 body lines and 12 KiB')
     targets = set()
@@ -324,7 +390,7 @@ def _git_show_base(root, base, name):
                           capture_output=True, text=True, check=False)
 
 
-def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_root=None, managed_copies=None, check_duplicates=False):
+def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_root=None, managed_copies=None, check_duplicates=False, redirect_provenance_revision=None):
     root = Path(root).resolve()
     findings, warnings = [], []
     def fail(code, path, message):
@@ -358,6 +424,8 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
         resolved = subprocess.run(['git', 'cat-file', '-t', base], cwd=root, capture_output=True, text=True, check=False)
         if resolved.returncode or resolved.stdout.strip() != 'commit':
             fail('DOCS_BASE', base, 'Trusted base commit must be available locally')
+    provenance = (redirect_provenance(root, base, redirect_provenance_revision, fail)
+                  if redirect_provenance_revision is not None else None)
     selected = set()
     for declared in deliverables:
         relative = safe_path(root, declared)
@@ -453,7 +521,7 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
         compact = meta.get('schema') == POLICY['compact']['document_schema']
         fields = POLICY['compact']['metadata'] if compact else POLICY['metadata']
         if meta.get('schema') == POLICY['redirect_schema']:
-            check_redirect(root, repository, name, meta, body, files, base, fail)
+            check_redirect(root, repository, name, meta, body, files, base, fail, provenance)
             continue
         optional = {} if compact else POLICY.get('optional_metadata', {})
         if meta.get('schema') not in document_schemas():
@@ -571,14 +639,18 @@ def check(root, revision, deliverables=(), today=None, base=None, policy_dsl_roo
                     })
         except Exception:
             pass
-    return {'ok': not findings, 'repository': repository, 'documents_checked': len(selected),
+    result = {'ok': not findings, 'repository': repository, 'documents_checked': len(selected),
             'scope': POLICY['adoption_scope'], 'managed_copies_verified': verified_copies, 'findings': findings, 'warnings': warnings}
+    if redirect_provenance_revision is not None:
+        result['redirect_provenance_revision'] = provenance
+    return result
 
 
-def complete_delivery(root, revision, deliverables, base, prepared, policy_dsl_root=None, managed_copies=None):
+def complete_delivery(root, revision, deliverables, base, prepared, policy_dsl_root=None, managed_copies=None, redirect_provenance_revision=None):
     """Bind an explicit result to its pre-generation plan and actual bytes."""
     root = Path(root).resolve()
-    result = check(root, revision, deliverables, base=base, policy_dsl_root=policy_dsl_root, managed_copies=managed_copies)
+    result = check(root, revision, deliverables, base=base, policy_dsl_root=policy_dsl_root,
+                   managed_copies=managed_copies, redirect_provenance_revision=redirect_provenance_revision)
     findings = result['findings']
     def fail(message):
         findings.append({'code': 'DOCS_COMPLETION', 'path': '', 'message': message})
@@ -698,6 +770,7 @@ def main():
     p.add_argument('--namespace', action='append', help='Explicit GitHub owner for --fleet; repeat to select multiple owners (default: subactor)')
     p.add_argument('--standard-revision', required=True, help='Full revision selected by trusted CI, never by the candidate document')
     p.add_argument('--base', help='Trusted base SHA for version-increment checks')
+    p.add_argument('--redirect-provenance-revision', help='Full immutable commit from protected caller configuration proving historical redirect sources; requires --base and preserves its complete audit range')
     p.add_argument('--policy-dsl-root', type=Path, help='Trusted checkout matching policy-dsl.lock.json; required only for DSL contracts')
     p.add_argument('--deliverable', action='append', default=[])
     p.add_argument('--complete', action='store_true', help='Require explicit result, trusted base and preparation receipt before completion')
@@ -710,6 +783,8 @@ def main():
     p.add_argument('--scope', choices=POLICY['delivery_scopes'])
     p.add_argument('--check-duplicates', action='store_true', help='Enforce strict duplicate and clone detection across documents')
     args = p.parse_args()
+    if args.redirect_provenance_revision is not None and (args.fleet or args.prepare):
+        p.error('--redirect-provenance-revision requires a single --root audit or completion with --base')
     managed_copies = None
     if args.managed_copies:
         if args.fleet:
@@ -725,7 +800,7 @@ def main():
             p.error('--complete requires --root, --base, one --deliverable and --prepared-plan')
         try:
             prepared = json.loads(args.prepared_plan.read_text())
-            result = complete_delivery(args.root, args.standard_revision, args.deliverable, args.base, prepared, args.policy_dsl_root, managed_copies)
+            result = complete_delivery(args.root, args.standard_revision, args.deliverable, args.base, prepared, args.policy_dsl_root, managed_copies, args.redirect_provenance_revision)
         except (OSError, ValueError, TypeError):
             result = {'ok': False, 'findings': [{'code': 'DOCS_COMPLETION', 'message': 'Cannot decode preparation receipt'}]}
     elif args.prepared_plan:
@@ -744,7 +819,7 @@ def main():
         except ValueError as error:
             p.error(str(error))
     else:
-        result = check(args.root, args.standard_revision, args.deliverable, base=args.base, policy_dsl_root=args.policy_dsl_root, managed_copies=managed_copies, check_duplicates=args.check_duplicates)
+        result = check(args.root, args.standard_revision, args.deliverable, base=args.base, policy_dsl_root=args.policy_dsl_root, managed_copies=managed_copies, check_duplicates=args.check_duplicates, redirect_provenance_revision=args.redirect_provenance_revision)
     print(json.dumps(result, indent=2))
     return 0 if result['ok'] else 1
 

@@ -524,6 +524,147 @@ class CompactConformance(unittest.TestCase):
         self.redirect()
         self.assertIn('DOCS_REDIRECT_BASE', self.codes(base=base))
 
+    def provenance_fixture(self, source=b'# Historical guide\nPublished after the audit base.\n'):
+        base = self.base()
+        (self.root / 'docs/old-guide.md').write_bytes(source)
+        self.git('add', '.')
+        provenance = self.base()
+        self.redirect()
+        return base, provenance
+
+    def test_trusted_provenance_accepts_after_base_path_without_changing_default(self):
+        base, provenance = self.provenance_fixture()
+        self.assertIn('DOCS_REDIRECT_BASE', self.codes(base=base))
+        result = self.check(base=base, redirect_provenance_revision=provenance)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['redirect_provenance_revision'], provenance)
+        self.assertNotIn('redirect_provenance_revision', self.check(base=base))
+
+    def test_provenance_preserves_full_discovery_range(self):
+        base = self.base()
+        (self.root / 'docs/old-guide.md').write_text('# Historical source\n')
+        (self.root / 'docs/unmanaged.md').write_text('# Missing metadata\n')
+        self.git('add', '.')
+        provenance = self.base()
+        self.redirect()
+        result = self.check(base=base, redirect_provenance_revision=provenance)
+        self.assertIn({'code': 'DOCS_METADATA', 'path': 'docs/unmanaged.md',
+                       'message': 'ValueError'}, result['findings'])
+
+    def test_provenance_requires_full_available_commit_and_base(self):
+        base, provenance = self.provenance_fixture()
+        blob = self.git('hash-object', 'docs/old-guide.md')
+        for value in ['', 'HEAD', provenance[:12], provenance.upper(), 'f' * 40, blob, 7, []]:
+            with self.subTest(value=value):
+                self.assertIn('DOCS_REDIRECT_PROVENANCE', self.codes(
+                    base=base, redirect_provenance_revision=value))
+        self.assertIn('DOCS_REDIRECT_PROVENANCE', self.codes(
+            redirect_provenance_revision=provenance))
+
+    def test_provenance_rejects_unrelated_and_future_commits(self):
+        base, provenance = self.provenance_fixture()
+        self.git('add', '.')
+        candidate = self.base()
+        self.git('commit', '--allow-empty', '-qm', 'future')
+        future = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-q', candidate)
+        self.assertIn('DOCS_REDIRECT_PROVENANCE', self.codes(
+            base=base, redirect_provenance_revision=future))
+        self.git('checkout', '--orphan', 'unrelated')
+        self.git('commit', '-qm', 'unrelated')
+        unrelated = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-q', candidate)
+        self.assertIn('DOCS_REDIRECT_PROVENANCE', self.codes(
+            base=base, redirect_provenance_revision=unrelated))
+        self.assertIn('DOCS_REDIRECT_PROVENANCE', self.codes(
+            base=provenance, redirect_provenance_revision=base))
+
+    def test_provenance_cannot_prove_an_invented_path_or_redirect_chain(self):
+        base = self.base()
+        self.redirect()
+        provenance = self.base()
+        self.assertIn('DOCS_REDIRECT_BASE', self.codes(
+            base=base, redirect_provenance_revision=base))
+        self.assertIn('DOCS_REDIRECT_BASE', self.codes(
+            base=base, redirect_provenance_revision=provenance))
+
+    def test_provenance_rejects_empty_binary_and_symlink_source(self):
+        for source in [b'', b'   \n', b'# Binary\x00data', b'\xff\xfe']:
+            with self.subTest(source=source):
+                fixture = CompactConformance()
+                fixture.setUp()
+                try:
+                    base, provenance = fixture.provenance_fixture(source)
+                    self.assertIn('DOCS_REDIRECT_BASE', fixture.codes(
+                        base=base, redirect_provenance_revision=provenance))
+                finally:
+                    fixture.doCleanups()
+        base = self.base()
+        (self.root / 'docs/old-guide.md').symlink_to('README.md')
+        self.git('add', '.')
+        provenance = self.base()
+        (self.root / 'docs/old-guide.md').unlink()
+        self.redirect()
+        self.assertIn('DOCS_REDIRECT_BASE', self.codes(
+            base=base, redirect_provenance_revision=provenance))
+
+    def test_provenance_never_weakens_target_owner_index_or_version_checks(self):
+        base, provenance = self.provenance_fixture()
+        options = dict(base=base, redirect_provenance_revision=provenance)
+        for target in ['docs/missing.md', 'docs/old-guide.md', '../outside.md']:
+            self.redirect(target=target)
+            self.assertIn('DOCS_REDIRECT_TARGET', self.codes(**options))
+        path = self.redirect()
+        path.write_text(path.read_text().replace('subactor/example', 'subactor/other'))
+        self.assertIn('DOCS_REDIRECT', self.codes(**options))
+        self.redirect()
+        (self.root / 'docs/README.md').write_text('[Legacy](refactoring/publication.md)\n')
+        self.assertIn('DOCS_INDEX', self.codes(**options))
+        self.write()
+        map_base = self.base()
+        path.write_text(path.read_text().replace('# Old guide', '# Changed heading'))
+        self.assertIn('DOCS_VERSION', self.codes(
+            base=map_base, redirect_provenance_revision=map_base))
+
+    def test_provenance_cli_matches_api_and_rejects_prepare_and_fleet(self):
+        base, provenance = self.provenance_fixture()
+        command = [sys.executable, str(checker.PACK / 'check.py'), '--root', str(self.root),
+                   '--standard-revision', REV, '--base', base,
+                   '--redirect-provenance-revision', provenance]
+        result = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual(json.loads(result.stdout), checker.check(
+            self.root, REV, base=base, redirect_provenance_revision=provenance))
+        for args in [
+                ['--root', str(self.root), '--prepare', '--kind', 'feature', '--id', 'new',
+                 '--scope', 'repository', '--deliverable', 'docs/FEATURE/NEW.md'],
+                ['--fleet', str(self.root.parent)]]:
+            result = subprocess.run([sys.executable, str(checker.PACK / 'check.py'),
+                '--standard-revision', REV, '--redirect-provenance-revision', provenance, *args],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+
+    def test_provenance_checks_historical_managed_version_and_untracked_target(self):
+        source = dict(self.meta, version=9)
+        base, provenance = self.provenance_fixture(
+            ('---\n' + json.dumps(source) + '\n---\n# Original guide\n').encode())
+        self.assertIn('DOCS_VERSION', self.codes(
+            base=base, redirect_provenance_revision=provenance))
+        self.git('rm', '--cached', self.name)
+        self.assertIn('DOCS_REDIRECT_TARGET', self.codes(
+            base=base, redirect_provenance_revision=provenance))
+
+    def test_completion_propagates_provenance_validation(self):
+        base, prepared = self.fixture.completion_fixture()
+        result = checker.complete_delivery(self.root, REV, [self.fixture.name], base,
+            prepared, redirect_provenance_revision=base)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['redirect_provenance_revision'], base)
+        result = checker.complete_delivery(self.root, REV, [self.fixture.name], base,
+            prepared, redirect_provenance_revision='HEAD')
+        self.assertFalse(result['completion']['ready'])
+        self.assertIn('DOCS_REDIRECT_PROVENANCE', {x['code'] for x in result['findings']})
+
     def test_map_cannot_hide_prose_or_external_destination(self):
         for body in ['New hidden report', '[External](https://example.org/guide.md)',
                      '[Alias](alias.md)', '[Broken](http://[bad)']:
