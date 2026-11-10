@@ -175,6 +175,26 @@ version względem poprzednich zarządzanych metadanych. Audyt bez bazy i preflig
 sprawdzają strukturę mapy, nie jej pochodzenie. Nowy plik z mapą nie może
 udawać historycznej ścieżki w bramie publikacji.
 
+Chroniony konsument może jawnie przekazać dodatkowy
+`--redirect-provenance-revision FULL_COMMIT_SHA`, jeśli dawny dokument powstał
+po bazie audytu. To osobne zaufane wejście: nie wolno odczytywać go z metadanych
+kandydata, automatycznie wybierać `HEAD`, `origin/main` ani skracać `--base`.
+Sam SHA nie dowodzi publikacji; chroniony konsument musi niezależnie potwierdzić
+publikację i wybrać rewizję przed wywołaniem checkera. Checker nie używa sieci.
+
+Oba commity muszą istnieć lokalnie, baza musi być przodkiem dodatkowej rewizji,
+a ta przodkiem aktualnego `HEAD` (równość jest dozwolona). Gdy starej ścieżki
+nie ma w bazie, dodatkowa rewizja musi zawierać pod nią zwykły, niepusty dokument
+UTF-8, bez NUL, dowiązania ani wcześniejszej mapy przekierowania. Zarządzany
+dokument źródłowy nadal wymaga wzrostu wersji. Niepoprawne wejście daje
+`DOCS_REDIRECT_PROVENANCE`; nieudowodniona ścieżka daje `DOCS_REDIRECT_BASE`.
+Zakres odkrywania zmian, cele, właściciel, indeks i pozostałe kontrole pozostają
+bez zmian. Wynik odnotowuje zweryfikowany `redirect_provenance_revision` lub
+`null` przy błędnym wejściu. Brak opcji zachowuje dotychczasowy kontrakt.
+Opcja działa w audycie pojedynczego repozytorium i `--complete`, nie w
+`--prepare` ani `--fleet`. API przyjmuje to samo opcjonalne wejście na końcu
+argumentów `check` i `complete_delivery`; wynik nie stanowi zgody na publikację.
+
 ## DOCS-011 — Jawne pokrycie pilotażu i floty
 
 `--fleet` audytuje bezpośrednie checkouty pod wskazanym katalogiem. Opcję
